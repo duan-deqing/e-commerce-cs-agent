@@ -1,3 +1,5 @@
+"""会话连续性：售后确认态下的「确认/取消」继承上一轮意图。"""
+
 from __future__ import annotations
 
 import re

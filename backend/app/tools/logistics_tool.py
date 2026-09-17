@@ -15,9 +15,10 @@ class QueryLogisticsTool(BaseTool):
         self.service = service or LogisticsService()
 
     async def run(self, ctx: ToolContext) -> dict[str, Any]:
-        return self.service.query(
+        return await self.service.query(
             tracking_no=ctx.entities.get("tracking_no"),
             order_id=ctx.entities.get("order_id"),
+            user_id=ctx.user_id,
         )
 
 

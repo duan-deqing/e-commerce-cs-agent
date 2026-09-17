@@ -1,3 +1,5 @@
+"""本地融合重排：向量分 + 中英文 2-gram 关键词重叠。"""
+
 from __future__ import annotations
 
 import re

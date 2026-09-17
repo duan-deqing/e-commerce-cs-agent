@@ -20,7 +20,7 @@ class QueryPromotionTool(BaseTool):
             or ctx.entities.get("product_kw")
             or (ctx.message[:12] if ctx.message else None)
         )
-        return self.service.query(keyword=keyword)
+        return await self.service.query(keyword=keyword)
 
 
 def register_promotion_tools(service: PromotionService | None = None) -> None:

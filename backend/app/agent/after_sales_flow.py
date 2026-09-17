@@ -1,3 +1,5 @@
+"""售后流程：缺参追问、确认建单、工具选择、风控/建单短路话术。"""
+
 from __future__ import annotations
 
 from typing import Any

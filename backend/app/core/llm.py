@@ -1,3 +1,9 @@
+"""LLM / Embedding 客户端。
+
+- OpenAICompatLLM：对接任意 OpenAI 兼容端点
+- MockLLM：无 API Key 时的离线可运行实现
+"""
+
 from __future__ import annotations
 
 import json
@@ -120,7 +126,11 @@ class OpenAICompatLLM(BaseLLM):
                 headers=self._headers(),
                 json=payload,
             )
-            resp.raise_for_status()
+            if resp.status_code >= 400:
+                body = resp.text[:500]
+                raise RuntimeError(
+                    f"embedding API {resp.status_code}, model={self.embedding_model}: {body}"
+                )
             data = resp.json()
             return [item["embedding"] for item in data["data"]]
 

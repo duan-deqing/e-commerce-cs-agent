@@ -1,3 +1,5 @@
+"""敏感信息脱敏：手机号 / 身份证 / 银行卡 / 邮箱 / 详细地址。"""
+
 from __future__ import annotations
 
 import re

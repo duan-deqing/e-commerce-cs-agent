@@ -1,7 +1,11 @@
+"""会话内存存储：滑动上下文窗口 + TTL/LRU 淘汰 + 售后状态机上下文。"""
+
 from __future__ import annotations
 
+import threading
 import time
 import uuid
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -72,22 +76,54 @@ class Session:
 
 
 class SessionStore:
+    """线程安全的 LRU + TTL 会话缓存，防止无限增长。"""
+
     def __init__(self) -> None:
-        self._store: dict[str, Session] = {}
+        self._store: OrderedDict[str, Session] = OrderedDict()
+        self._lock = threading.Lock()
 
     def get_or_create(self, session_id: str | None, user_id: str) -> Session:
         sid = session_id or f"s_{uuid.uuid4().hex[:12]}"
-        if sid not in self._store:
-            self._store[sid] = Session(session_id=sid, user_id=user_id)
-        sess = self._store[sid]
-        sess.user_id = user_id
-        return sess
+        now = time.time()
+        ttl = settings.session_ttl_seconds
+        max_size = settings.session_max_size
+        with self._lock:
+            self._evict(now, ttl, max_size)
+            sess = self._store.get(sid)
+            if sess is not None:
+                # 同一 session 被不同 user 使用时以最新请求为准并刷新
+                sess.user_id = user_id
+                sess.updated_at = now
+                self._store.move_to_end(sid)
+                return sess
+            sess = Session(session_id=sid, user_id=user_id)
+            self._store[sid] = sess
+            self._store.move_to_end(sid)
+            while len(self._store) > max_size:
+                self._store.popitem(last=False)
+            return sess
 
     def get(self, session_id: str) -> Session | None:
-        return self._store.get(session_id)
+        now = time.time()
+        with self._lock:
+            sess = self._store.get(session_id)
+            if sess is None:
+                return None
+            if now - sess.updated_at > settings.session_ttl_seconds:
+                self._store.pop(session_id, None)
+                return None
+            self._store.move_to_end(session_id)
+            return sess
+
+    def _evict(self, now: float, ttl: int, max_size: int) -> None:
+        expired = [sid for sid, s in self._store.items() if now - s.updated_at > ttl]
+        for sid in expired:
+            self._store.pop(sid, None)
+        while len(self._store) > max_size:
+            self._store.popitem(last=False)
 
     def summary(self, session_id: str) -> dict[str, Any] | None:
-        sess = self._store.get(session_id)
+        sess = self.get(session_id)
         if not sess:
             return None
         return {
@@ -107,6 +143,14 @@ class SessionStore:
             "created_at": sess.created_at,
             "updated_at": sess.updated_at,
         }
+
+    def stats(self) -> dict[str, Any]:
+        with self._lock:
+            return {
+                "sessions": len(self._store),
+                "ttl_seconds": settings.session_ttl_seconds,
+                "max_size": settings.session_max_size,
+            }
 
 
 session_store = SessionStore()

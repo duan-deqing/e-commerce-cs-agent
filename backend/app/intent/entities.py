@@ -1,3 +1,5 @@
+"""从用户消息抽取业务实体（订单号、运单号、金额、原因等）。"""
+
 from __future__ import annotations
 
 import re
@@ -74,3 +76,48 @@ def merge_entities(base: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
         else:
             merged[k] = v
     return merged
+
+
+# 按意图域保留的实体，切换意图时清理其它域，避免串味
+INTENT_ENTITY_SCOPES: dict[str, set[str]] = {
+    "order_query": {"order_id"},
+    "logistics_query": {"order_id", "tracking_no"},
+    "product_inquiry": {"product_kw"},
+    "promotion_query": {"product_kw", "keyword"},
+    "after_sales_return": {
+        "order_id",
+        "reason",
+        "amount",
+        "confirm",
+        "cancel",
+        "ticket_id",
+    },
+    "after_sales_exchange": {
+        "order_id",
+        "reason",
+        "variant",
+        "product_kw",
+        "confirm",
+        "cancel",
+        "ticket_id",
+    },
+    "after_sales_progress": {"order_id", "ticket_id"},
+    "refund_query": {"order_id", "ticket_id"},
+}
+
+
+def prune_entities_for_intent(
+    entities: dict[str, Any],
+    prev_intent: str | None,
+    intent_id: str,
+) -> dict[str, Any]:
+    """意图切换时裁剪无关实体；同域或未知意图则原样保留。"""
+    if not entities or prev_intent == intent_id:
+        return entities
+    keep = INTENT_ENTITY_SCOPES.get(intent_id)
+    if not keep:
+        return entities
+    # 售后确认态相关短词始终保留
+    preserve = {"confirm", "cancel"}
+    return {k: v for k, v in entities.items() if k in keep or k in preserve}
+

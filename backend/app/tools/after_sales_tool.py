@@ -15,7 +15,7 @@ class CreateReturnTool(BaseTool):
         self.service = service or AfterSalesService()
 
     async def run(self, ctx: ToolContext) -> dict[str, Any]:
-        return self.service.create_return(
+        return await self.service.create_return(
             order_id=str(ctx.entities.get("order_id")),
             user_id=ctx.user_id,
             reason=ctx.entities.get("reason"),
@@ -32,7 +32,7 @@ class CreateExchangeTool(BaseTool):
         self.service = service or AfterSalesService()
 
     async def run(self, ctx: ToolContext) -> dict[str, Any]:
-        return self.service.create_exchange(
+        return await self.service.create_exchange(
             order_id=str(ctx.entities.get("order_id")),
             user_id=ctx.user_id,
             variant=ctx.entities.get("variant") or ctx.entities.get("product_kw"),
@@ -49,7 +49,7 @@ class QueryAfterSalesTool(BaseTool):
         self.service = service or AfterSalesService()
 
     async def run(self, ctx: ToolContext) -> dict[str, Any]:
-        return self.service.query_ticket(
+        return await self.service.query_ticket(
             ticket_id=ctx.entities.get("ticket_id"),
             order_id=ctx.entities.get("order_id"),
         )
@@ -64,7 +64,7 @@ class QueryRefundTool(BaseTool):
         self.service = service or AfterSalesService()
 
     async def run(self, ctx: ToolContext) -> dict[str, Any]:
-        return self.service.query_refund(
+        return await self.service.query_refund(
             ticket_id=ctx.entities.get("ticket_id"),
             order_id=ctx.entities.get("order_id"),
         )

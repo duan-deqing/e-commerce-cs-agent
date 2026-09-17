@@ -1,3 +1,5 @@
+"""FastAPI 应用入口：生命周期内初始化 DB、工具与知识库索引。"""
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -14,6 +16,10 @@ from app.tools import bootstrap_tools
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
+    from app.db import init_db, seed_if_empty
+
+    init_db()
+    seed_if_empty()
     bootstrap_tools()
     # 尽力预建索引；失败不阻断启动
     try:
@@ -35,7 +41,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.cors_origin_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

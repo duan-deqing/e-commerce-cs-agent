@@ -1,8 +1,10 @@
+"""进程内简易指标：请求量、意图分布、工具成功率、延迟分位。"""
+
 from __future__ import annotations
 
 import threading
 import time
-from collections import Counter, defaultdict
+from collections import Counter
 from dataclasses import dataclass, field
 
 

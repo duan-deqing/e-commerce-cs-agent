@@ -117,6 +117,9 @@ backend/
 │   │   ├── pipeline.py         # 统一流水线：工具 → RAG → 生成
 │   │   ├── continuity.py       # 售后确认态会话继承
 │   │   ├── after_sales_flow.py # 售后追问/建单/风控短路
+│   │   ├── sql_agent/          # 模板化 SQL Agent（参数绑定，禁拼接）
+│   │   │   ├── templates.py
+│   │   │   └── agent.py
 │   │   ├── prompts.py          # 系统提示词
 │   │   └── fallback.py         # 降级与模板回答
 │   ├── intent/
@@ -137,7 +140,8 @@ backend/
 │   │   ├── reranker.py
 │   │   ├── chain.py            # 检索问答链
 │   │   └── ingest.py           # 入库 CLI
-│   ├── services/               # mock 订单/物流/售后/促销
+│   ├── services/               # 业务服务（经 SQL Agent 访问库）
+│   ├── db/                     # SQLite 连接 / Schema / Seed
 │   ├── risk/                   # 脱敏、退款风控
 │   ├── state/session.py        # 会话窗口 + 售后状态机
 │   ├── schemas/chat.py         # 请求/响应模型
@@ -190,6 +194,7 @@ routes_chat
 | GET | `/api/v1/sessions/{session_id}` | 会话摘要（意图/实体/售后状态） |
 | POST | `/api/v1/knowledge/reindex` | 重建向量知识库 |
 | GET | `/api/v1/metrics` | 请求量、意图分布、延迟、工具成功率 |
+| GET | `/api/v1/sql-templates` | SQL Agent 模板目录 |
 
 ### 非流式对话
 
@@ -258,6 +263,10 @@ const reader = res.body!.getReader();
 | 变量 | 默认 | 说明 |
 |------|------|------|
 | `APP_HOST` / `APP_PORT` | `0.0.0.0` / `8000` | 监听地址 |
+| `API_KEY` | 空 | 非空则要求请求头 `X-API-Key` |
+| `CORS_ORIGINS` | 空 | 逗号分隔；dev 默认 `*` |
+| `SESSION_TTL_SECONDS` | `1800` | 会话过期 |
+| `SESSION_MAX_SIZE` | `5000` | 会话 LRU 上限 |
 | `LLM_BASE_URL` | `https://api.openai.com/v1` | OpenAI 兼容 Base URL |
 | `LLM_API_KEY` | 空 | 空则 Mock LLM |
 | `LLM_MODEL` | `gpt-4o-mini` | 对话模型 |
@@ -288,9 +297,12 @@ MOCK_LLM=false
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_API_KEY=sk-xxx
 LLM_MODEL=qwen-plus
+# Embedding 必须用向量模型 ID，不能用 qwen 对话模型名
 EMBEDDING_MODEL=text-embedding-v3
 MOCK_LLM=false
 ```
+
+启动日志若出现 `embedding API 400`，优先检查 `EMBEDDING_MODEL` 是否为该平台合法的向量模型。
 
 **Ollama（本地）**
 ```env
@@ -302,15 +314,30 @@ MOCK_LLM=false
 
 ---
 
-## Mock 业务数据
+## 业务数据（SQLite + SQL Agent）
 
-路径：`backend/data/`
+业务数据已从 JSON mock 迁移到 **SQLite**（默认 `backend/data/app.db`），读写均通过**模板化 SQL Agent**：
 
-| 文件 | 内容 |
-|------|------|
-| `orders.json` | 订单（用户 `u_1001` 等） |
-| `logistics.json` | 运单轨迹 |
-| `promotions.json` | 618 / 新人券 / 季节活动 |
+- SQL 全部登记在 `app/agent/sql_agent/templates.py`，使用 `:param` 参数绑定
+- **禁止** LLM 生成裸 SQL；Agent 只负责「选模板 + 填参数」
+- 启动时自动建表并 Seed 演示数据
+
+常用表：`orders` / `order_items` / `logistics_tracks` / `logistics_trace` / `promotions` / `after_sales_tickets` / `after_sales_timeline`
+
+查看模板目录：
+
+```http
+GET /api/v1/sql-templates
+```
+
+**原 JSON 文件**仍保留在 `backend/data/*.json` 作为初始 Seed 来源参考，运行时以库为准。
+
+| 演示单号 | 说明 |
+|----------|------|
+| `ORD20260301001` | 已发货 / ¥299 |
+| `ORD20260310003` | 高金额 ¥2599（风控样例） |
+| `YT1234567890` | 运单 |
+| `TK100001` | 售后工单 |
 
 常用单号：
 

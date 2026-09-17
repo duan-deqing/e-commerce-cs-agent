@@ -1,3 +1,9 @@
+"""对话编排入口。
+
+职责：会话准备 → 脱敏 → 意图分类 → 调用 pipeline；
+流式模式用 asyncio.Queue 把 pipeline 事件转成 SSE。
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -31,6 +37,7 @@ class Orchestrator:
         message: str,
         session_id: str | None = None,
     ) -> dict[str, Any]:
+        """非流式：一次返回完整 JSON 应答。"""
         t0 = time.perf_counter()
         metrics.record_request()
         session = session_store.get_or_create(session_id, user_id)
@@ -51,11 +58,15 @@ class Orchestrator:
             session.add_assistant(answer)
             latency_ms = (time.perf_counter() - t0) * 1000
             metrics.record_latency(latency_ms)
+            try:
+                intent_name = INTENT_META.get(Intent(intent_id), {}).get("name", intent_id)
+            except ValueError:
+                intent_name = intent_id
             return {
                 "session_id": session.session_id,
                 "user_id": user_id,
                 "intent": intent_id,
-                "intent_name": INTENT_META.get(Intent(intent_id), {}).get("name", intent_id),
+                "intent_name": intent_name,
                 "confidence": intent_result.get("confidence"),
                 "answer": answer,
                 "sources": payload.get("sources", []),
@@ -90,7 +101,7 @@ class Orchestrator:
         message: str,
         session_id: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """SSE 事件流：intent / tool_start / tool_result / sources / token / done / error"""
+        """流式 SSE：intent / tool_* / sources / token / done / error。"""
         t0 = time.perf_counter()
         metrics.record_request()
         session = session_store.get_or_create(session_id, user_id)
@@ -109,7 +120,11 @@ class Orchestrator:
                     "intent",
                     {
                         "intent": intent_id,
-                        "intent_name": INTENT_META.get(Intent(intent_id), {}).get("name"),
+                        "intent_name": (
+                            INTENT_META.get(Intent(intent_id), {}).get("name")
+                            if intent_id in {i.value for i in Intent}
+                            else intent_id
+                        ),
                         "confidence": intent_result.get("confidence"),
                         "entities": session.entities,
                     },
@@ -174,6 +189,12 @@ class Orchestrator:
         intent_id = intent_result["intent"]
         intent_id, intent_result = apply_session_continuity(
             session, intent_id, intent_result, safe_message
+        )
+        # 意图切换时裁剪无关实体，避免订单号/原因串味
+        from app.intent.entities import prune_entities_for_intent
+
+        session.entities = prune_entities_for_intent(
+            session.entities, session.last_intent, intent_id
         )
         session.last_intent = intent_id
         session.merge_entities(intent_result.get("entities") or {})

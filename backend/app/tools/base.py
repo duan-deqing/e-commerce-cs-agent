@@ -1,10 +1,12 @@
+"""业务工具运行时：Tool 抽象、重试、超时、并行执行与注册表。"""
+
 from __future__ import annotations
 
 import asyncio
 import time
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -54,6 +56,7 @@ async def run_with_retry(
     max_retries: int | None = None,
     timeout_s: float | None = None,
 ) -> ToolResult:
+    """单工具执行：缺参直接失败；超时+指数退避重试；最终包成 ToolResult。"""
     max_retries = max_retries if max_retries is not None else settings.tool_max_retries
     timeout_s = timeout_s if timeout_s is not None else settings.tool_timeout_s
     start = time.perf_counter()
@@ -105,6 +108,7 @@ async def run_parallel(
     tools: list[BaseTool],
     ctx: ToolContext,
 ) -> list[ToolResult]:
+    """并行执行多个工具（语义对齐 LCEL RunnableParallel）。"""
     if not tools:
         return []
     results = await asyncio.gather(*[run_with_retry(t, ctx) for t in tools])

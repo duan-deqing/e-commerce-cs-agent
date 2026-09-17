@@ -1,3 +1,5 @@
+"""Markdown 语义分块：标题优先切分 + 固定窗口 + 句边界。"""
+
 from __future__ import annotations
 
 import re

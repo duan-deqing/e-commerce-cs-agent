@@ -1,3 +1,5 @@
+"""向量存储：ChromaDB 持久化，维度变更自动重建；不可用时内存降级。"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -9,43 +11,95 @@ from app.rag.embeddings import embed_query, embed_texts
 
 logger = get_logger(__name__)
 
+_client = None
 _collection = None
 _use_chroma = True
+_collection_dim: int | None = None
 
 
-def _get_collection():
-    global _collection, _use_chroma
-    if _collection is not None:
+def _get_chroma_client():
+    global _client
+    if _client is not None:
+        return _client
+    import chromadb
+    from chromadb.config import Settings as ChromaSettings
+
+    _client = chromadb.PersistentClient(
+        path=str(settings.chroma_path),
+        settings=ChromaSettings(anonymized_telemetry=False),
+    )
+    return _client
+
+
+def _ensure_collection(dim: int | None = None):
+    """按需打开/重建集合；embedding 维度变化时自动重建。"""
+    global _collection, _use_chroma, _collection_dim
+
+    if _use_chroma is False and isinstance(_collection, _MemoryCollection):
         return _collection
-    try:
-        import chromadb
-        from chromadb.config import Settings as ChromaSettings
 
-        client = chromadb.PersistentClient(
-            path=str(settings.chroma_path),
-            settings=ChromaSettings(anonymized_telemetry=False),
-        )
-        # 维度变更时强制重建，避免 upsert 维度不一致
-        try:
-            _collection = client.get_collection(name="ecommerce_kb")
-            if _collection.metadata and _collection.metadata.get("dim") != "128":
-                client.delete_collection("ecommerce_kb")
-                _collection = client.get_or_create_collection(
-                    name="ecommerce_kb",
-                    metadata={"hnsw:space": "cosine", "dim": "128"},
-                )
-        except Exception:  # noqa: BLE001
-            _collection = client.get_or_create_collection(
-                name="ecommerce_kb",
-                metadata={"hnsw:space": "cosine", "dim": "128"},
-            )
-        _use_chroma = True
-        logger.info("ChromaDB ready at %s", settings.chroma_path)
+    try:
+        client = _get_chroma_client()
     except Exception as e:  # noqa: BLE001
         logger.warning("Chroma unavailable, fallback to in-memory store: %s", e)
         _use_chroma = False
         _collection = _MemoryCollection()
+        return _collection
+
+    try:
+        col = client.get_collection(name="ecommerce_kb")
+        stored_dim = None
+        if col.metadata:
+            stored_dim = int(col.metadata.get("dim") or 0) or None
+        # 旧库无 dim 元数据时，用已有向量长度推断
+        if stored_dim is None and col.count() > 0:
+            try:
+                peek = col.peek(limit=1)
+                embs = peek.get("embeddings")
+                if embs is not None and len(embs):
+                    stored_dim = len(embs[0])
+            except Exception:  # noqa: BLE001
+                stored_dim = None
+
+        need_rebuild = dim is not None and stored_dim is not None and stored_dim != dim
+        if need_rebuild:
+            logger.warning(
+                "Chroma dim mismatch (stored=%s, new=%s), rebuilding collection",
+                stored_dim,
+                dim,
+            )
+            client.delete_collection("ecommerce_kb")
+            col = client.get_or_create_collection(
+                name="ecommerce_kb",
+                metadata={"hnsw:space": "cosine", "dim": str(dim)},
+            )
+        elif dim is not None and not col.metadata:
+            # 补写维度元数据
+            client.modify_collection(
+                "ecommerce_kb",
+                metadata={"hnsw:space": "cosine", "dim": str(dim)},
+            )
+        _collection = col
+        _collection_dim = dim or stored_dim
+        _use_chroma = True
+        logger.info("ChromaDB ready at %s (dim=%s)", settings.chroma_path, _collection_dim)
+    except Exception:
+        # 集合不存在
+        meta = {"hnsw:space": "cosine"}
+        if dim is not None:
+            meta["dim"] = str(dim)
+        _collection = client.get_or_create_collection(name="ecommerce_kb", metadata=meta)
+        _collection_dim = dim
+        _use_chroma = True
+        logger.info("ChromaDB ready at %s (new collection dim=%s)", settings.chroma_path, dim)
     return _collection
+
+
+def _get_collection(dim: int | None = None):
+    global _collection
+    if _collection is not None and (dim is None or _collection_dim in (None, dim)):
+        return _collection
+    return _ensure_collection(dim)
 
 
 class _MemoryCollection:
@@ -100,9 +154,16 @@ class _MemoryCollection:
 async def ingest_chunks(chunks: list[Chunk]) -> int:
     if not chunks:
         return 0
-    col = _get_collection()
     texts = [c.text for c in chunks]
-    embs = await embed_texts(texts)
+    try:
+        embs = await embed_texts(texts)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("embedding failed, fallback to mock vectors: %s", e)
+        from app.core.llm import MockLLM
+
+        embs = await MockLLM().embed(texts)
+    dim = len(embs[0]) if embs else None
+    col = _ensure_collection(dim=dim)
     ids = [c.doc_id for c in chunks]
     metadatas = [
         {
@@ -113,11 +174,10 @@ async def ingest_chunks(chunks: list[Chunk]) -> int:
         for c in chunks
     ]
     if _use_chroma:
-        # chroma upsert
         col.upsert(ids=ids, embeddings=embs, documents=texts, metadatas=metadatas)
     else:
         col.add(ids=ids, embeddings=embs, documents=texts, metadatas=metadatas)
-    logger.info("ingested %s chunks (chroma=%s)", len(ids), _use_chroma)
+    logger.info("ingested %s chunks (chroma=%s dim=%s)", len(ids), _use_chroma, dim)
     return len(ids)
 
 
@@ -128,14 +188,14 @@ async def ingest_knowledge_dir() -> int:
 
 async def similarity_search(query: str, k: int | None = None) -> list[dict[str, Any]]:
     k = k or settings.rag_top_k
-    col = _get_collection()
+    qvec = await embed_query(query)
+    col = _ensure_collection(dim=len(qvec))
     try:
         count = col.count()
     except Exception:  # noqa: BLE001
         count = 0
     if count == 0:
         return []
-    qvec = await embed_query(query)
     res = col.query(query_embeddings=[qvec], n_results=min(k, count))
     docs = res.get("documents", [[]])[0]
     metas = res.get("metadatas", [[]])[0]

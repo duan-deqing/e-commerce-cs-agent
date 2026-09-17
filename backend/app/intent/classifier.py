@@ -1,3 +1,5 @@
+"""意图分类：本地规则快通道 + LLM 零样本分类，输出统一 JSON。"""
+
 from __future__ import annotations
 
 import json

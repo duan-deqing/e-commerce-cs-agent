@@ -1,14 +1,17 @@
+"""聊天 API：非流式 JSON 与 SSE 流式。"""
+
 from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sse_starlette.sse import EventSourceResponse
 
 from app.agent.orchestrator import orchestrator
+from app.core.auth import verify_api_key
 from app.schemas.chat import ChatRequest, ChatResponse
 
-router = APIRouter(prefix="/api/v1", tags=["chat"])
+router = APIRouter(prefix="/api/v1", tags=["chat"], dependencies=[Depends(verify_api_key)])
 
 
 @router.post("/chat", response_model=ChatResponse)

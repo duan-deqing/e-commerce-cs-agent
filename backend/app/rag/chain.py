@@ -1,3 +1,5 @@
+"""RAG 问答链：召回 → 重排 → 低置信拒答 → LLM 回答。"""
+
 from __future__ import annotations
 
 from typing import Any

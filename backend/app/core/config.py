@@ -1,3 +1,5 @@
+"""应用配置：从环境变量 / .env 读取，全局单例 settings。"""
+
 from functools import lru_cache
 from pathlib import Path
 
@@ -16,6 +18,15 @@ class Settings(BaseSettings):
     app_env: str = "dev"
     app_host: str = "0.0.0.0"
     app_port: int = 8000
+
+    # 简易鉴权：配置后要求请求头 X-API-Key 与之相等（空则关闭，便于本地调试）
+    api_key: str = ""
+    # CORS 白名单，逗号分隔；空则 dev 用 *，非 dev 收紧为空（需显式配置）
+    cors_origins: str = ""
+
+    # 会话内存上限
+    session_ttl_seconds: int = 1800
+    session_max_size: int = 5000
 
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: str = ""
@@ -39,6 +50,7 @@ class Settings(BaseSettings):
 
     knowledge_dir: str = str(BASE_DIR / "knowledge")
     data_dir: str = str(BASE_DIR / "data")
+    db_path: str = str(BASE_DIR / "data" / "app.db")
 
     @property
     def use_mock_llm(self) -> bool:
@@ -59,9 +71,20 @@ class Settings(BaseSettings):
         return p if p.is_absolute() else BASE_DIR / p
 
     @property
+    def backend_root(self) -> Path:
+        return BASE_DIR
+
+    @property
     def chroma_path(self) -> Path:
         p = Path(self.chroma_persist_dir)
         return p if p.is_absolute() else BASE_DIR / p
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        raw = (self.cors_origins or "").strip()
+        if raw:
+            return [x.strip() for x in raw.split(",") if x.strip()]
+        return ["*"] if self.app_env == "dev" else []
 
 
 @lru_cache

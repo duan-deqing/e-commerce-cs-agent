@@ -1,3 +1,9 @@
+"""统一对话流水线（流式 / 非流式共用）。
+
+顺序：快捷回复 → 售后预检 → 工具并行 → RAG → LLM 生成。
+emit 非空时会向外推送 tool/token/sources 等事件（供 SSE）。
+"""
+
 from __future__ import annotations
 
 from typing import Any, Awaitable, Callable
@@ -173,8 +179,13 @@ async def run_pipeline(
     emit: EmitFn | None = None,
     stream: bool = False,
 ) -> dict[str, Any]:
-    """意图之后的统一流水线：快捷回复 → 售后 → 工具 → RAG → 生成。"""
-    meta = INTENT_META.get(Intent(intent_id), {})
+    """意图之后的主流程；返回 payload，含 answer/tools/sources/handoff。"""
+    try:
+        intent_enum = Intent(intent_id)
+        meta = INTENT_META.get(intent_enum, {})
+    except ValueError:
+        logger.warning("unknown intent_id in pipeline: %s", intent_id)
+        meta = {}
     handler = meta.get("handler", "fallback")
 
     if handler == "greeting":

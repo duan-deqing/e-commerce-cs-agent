@@ -14,6 +14,10 @@ from app.tools import bootstrap_tools
 
 async def main() -> int:
     setup_logging("WARNING")
+    from app.db import init_db, seed_if_empty
+
+    init_db()
+    seed_if_empty()
     bootstrap_tools()
     from app.agent.orchestrator import orchestrator
     from app.rag.vectorstore import ingest_knowledge_dir

@@ -7,8 +7,8 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
     llm = get_llm()
-    # 批量，避免过大请求
-    batch = 32
+    # DashScope text-embedding 单次 input 上限 10，保持兼容
+    batch = 10
     vectors: list[list[float]] = []
     for i in range(0, len(texts), batch):
         part = texts[i : i + batch]

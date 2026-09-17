@@ -25,7 +25,7 @@ pnpm dev
 - 后端 http://127.0.0.1:8000（api）
 - 前端 http://localhost:5173（web）
 
-`Ctrl+C` 结束。也可单独：`pnpm run api` / `pnpm run web`，或使用 `.\run-dev.ps1`。
+`Ctrl+C` 结束。也可单独：`pnpm run api` / `pnpm run web`，或使用 `.\scripts\run-dev.ps1`。
 
 ## 快速开始（后端）
 

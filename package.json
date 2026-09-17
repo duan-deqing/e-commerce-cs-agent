@@ -6,7 +6,7 @@
     "dev": "concurrently -k -n api,web -c cyan,magenta \"pnpm run api\" \"pnpm run web\"",
     "api": "powershell -ExecutionPolicy Bypass -File ./scripts/start-backend.ps1",
     "web": "pnpm --dir frontend dev",
-    "dev:ps1": "powershell -ExecutionPolicy Bypass -File ./run-dev.ps1"
+    "dev:ps1": "powershell -ExecutionPolicy Bypass -File ./scripts/run-dev.ps1"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

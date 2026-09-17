@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type TransitionEvent } from 'react'
 import {
+  Brain,
   CaretDown,
   CheckCircle,
   CircleNotch,
@@ -16,6 +17,7 @@ interface Props {
 
 const STEP_ICON: Record<string, Icon> = {
   intent: Lightning,
+  reasoning: Brain,
   done: CheckCircle,
   error: WarningCircle,
 }
@@ -34,6 +36,41 @@ export function TracePanel({ trace, streaming }: Props) {
   const [open, setOpen] = useState(streaming)
   const touchedRef = useRef(false)
   const wasStreaming = useRef(streaming)
+  const reasoningRef = useRef<HTMLDivElement | null>(null)
+  const reasoningPinnedRef = useRef(true)
+  const animatingRef = useRef(false)
+  const prevOpenRef = useRef(open)
+
+  // 思考流式文本：新增量到达时吸底展示最新内容；用户上滚即暂停吸底，滚回底部恢复
+  const reasoningDetail = trace.find((e) => e.kind === 'reasoning')?.detail ?? ''
+
+  const pinReasoning = () => {
+    const el = reasoningRef.current
+    if (el && reasoningPinnedRef.current) el.scrollTop = el.scrollHeight
+  }
+
+  useEffect(() => {
+    // 展开/收起切换后进入动画期：期间 scroll 事件多由高度变化/滚动锚定引起，不据此解吸
+    if (prevOpenRef.current !== open) {
+      prevOpenRef.current = open
+      animatingRef.current = true
+    }
+    pinReasoning()
+  }, [reasoningDetail, open])
+
+  // 动画（grid-template-rows）结束后补一次吸底并退出动画期
+  const handleBodyTransitionEnd = (e: TransitionEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget || e.propertyName !== 'grid-template-rows') return
+    animatingRef.current = false
+    pinReasoning()
+  }
+
+  const handleReasoningScroll = () => {
+    if (animatingRef.current) return
+    const el = reasoningRef.current
+    if (!el) return
+    reasoningPinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+  }
 
   useEffect(() => {
     if (streaming && !wasStreaming.current && !touchedRef.current) setOpen(true)
@@ -73,7 +110,10 @@ export function TracePanel({ trace, streaming }: Props) {
         <CaretDown size={14} className={`tt-chevron${open ? ' open' : ''}`} aria-hidden />
       </button>
 
-      <div className={`trace-body${open ? ' open' : ''}`}>
+      <div
+        className={`trace-body${open ? ' open' : ''}`}
+        onTransitionEnd={handleBodyTransitionEnd}
+      >
         <div className="trace-inner">
           <ol className="trace-steps">
             {trace.map((e) => {
@@ -85,7 +125,21 @@ export function TracePanel({ trace, streaming }: Props) {
                   </span>
                   <div className="step-main">
                     <div className="step-title">{e.title}</div>
-                    {e.detail ? <div className="step-detail">{e.detail}</div> : null}
+                    {e.detail ? (
+                      e.kind === 'reasoning' ? (
+                        // 思考流式文本：限高滚动，可查看全部思考内容；tabIndex 让键盘也能滚动
+                        <div
+                          className="step-detail reasoning"
+                          ref={reasoningRef}
+                          tabIndex={0}
+                          onScroll={handleReasoningScroll}
+                        >
+                          <span className="reasoning-text">{e.detail}</span>
+                        </div>
+                      ) : (
+                        <div className="step-detail">{e.detail}</div>
+                      )
+                    ) : null}
                     {e.meta ? <div className="step-meta">{e.meta}</div> : null}
                   </div>
                 </li>

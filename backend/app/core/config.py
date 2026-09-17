@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4o-mini"
     embedding_model: str = "text-embedding-3-small"
     mock_llm: str = "auto"  # auto | true | false
+    # 思考型模型（DashScope qwen3 / DeepSeek-R1 等）思考开关：
+    # auto=不下发参数（跟随端点默认）；false=enable_thinking:false，显著降低首 token 延迟（意图分类同步受益）
+    llm_enable_thinking: str = "auto"
 
     tavily_api_key: str = ""
 

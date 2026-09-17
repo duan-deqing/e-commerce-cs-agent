@@ -788,6 +788,20 @@ a:focus-visible {
   line-height: 1.5;
 }
 
+/* 思考流式文本：限高可滚动，流式时由 JS 吸底，用户上滚即自由查看全部 */
+.step-detail.reasoning {
+  max-height: 126px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-style: italic;
+}
+
+.reasoning-text {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .step-meta {
   margin-top: 3px;
   font-family: var(--font-mono);

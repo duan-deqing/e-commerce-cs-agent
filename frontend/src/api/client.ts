@@ -34,6 +34,7 @@ export interface StreamCallbacks {
   onToolStart?: (data: { tool: string }) => void
   onToolResult?: (data: ToolItem) => void
   onSources?: (data: { sources: SourceItem[] }) => void
+  onReasoning?: (delta: string) => void
   onToken?: (token: string) => void
   onDone?: (data: {
     answer?: string
@@ -113,6 +114,9 @@ export async function streamChat(
         break
       case 'sources':
         cb.onSources?.(obj as unknown as { sources: SourceItem[] })
+        break
+      case 'reasoning':
+        cb.onReasoning?.(String(obj.text ?? ''))
         break
       case 'token':
         cb.onToken?.(String(obj.token ?? ''))

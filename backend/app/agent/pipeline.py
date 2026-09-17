@@ -167,15 +167,19 @@ async def generate_answer(
     if stream:
         parts: list[str] = []
         try:
-            async for token in llm.chat_stream(
+            async for chunk in llm.chat_stream(
                 system=system,
                 messages=messages,
                 temperature=0.3,
                 max_tokens=max_tokens,
                 usage_out=usage_out,
             ):
-                parts.append(token)
-                await _emit(emit, "token", {"token": token})
+                if chunk.kind == "reasoning":
+                    # 思考增量透出到执行过程面板，不进入回答正文与历史
+                    await _emit(emit, "reasoning", {"text": chunk.text})
+                    continue
+                parts.append(chunk.text)
+                await _emit(emit, "token", {"token": chunk.text})
             answer = "".join(parts).strip()
             if not answer:
                 answer = template_answer_from_tools(meta.get("name", ""), tool_results)

@@ -243,6 +243,7 @@ event: intent        # 意图与置信度
 event: tool_start    # 工具开始
 event: tool_result   # 工具结果
 event: sources       # RAG 来源（如有）
+event: reasoning     # 思考型模型思考增量（qwen3 / DeepSeek-R1 等，先于正文产出）
 event: token         # 回答增量
 event: done          # 最终汇总
 event: error         # 异常
@@ -292,6 +293,15 @@ const reader = res.body!.getReader();
 | `LLM_PRICE_COMPLETION_PER_1K` | `0.0006` | 补全 Token 单价（$/1k，成本估算） |
 | `PROMPT_VERSION` | `v1` | 全量 prompt 版本（回滚开关） |
 | `PROMPT_GRAY_PERCENT` | `0` | v2 灰度百分比 0-100（crc32(session_id) 稳定分流） |
+| `LLM_ENABLE_THINKING` | `auto` | 思考型模型思考开关（auto/true/false）；`false` 下发 `enable_thinking:false`，显著降低首 token 延迟（意图分类同步受益） |
+
+### 首 token 延迟（TTFT）优化
+
+思考型模型（DashScope qwen3 系列等）生成正文前会先输出思考增量（`reasoning_content`），默认配置下后端将其以 `reasoning` SSE 事件流式透出，前端在执行过程面板实时显示「深度思考」——用户在思考阶段即可看到进展，无需干等。若追求更低首包延迟，设置 `LLM_ENABLE_THINKING=false` 直接关闭思考，意图分类与回答生成两个阶段同时提速；代价是复杂问题的回答质量可能下降。可用探针量化对比：
+
+```powershell
+python scripts/ttft_probe.py --base http://127.0.0.1:8000 --message "这款手机支持快充吗"
+```
 
 ### 对接真实模型（示例）
 

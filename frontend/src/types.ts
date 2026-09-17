@@ -5,6 +5,7 @@ export type TraceKind =
   | 'tool_start'
   | 'tool_result'
   | 'sources'
+  | 'reasoning'
   | 'token'
   | 'done'
   | 'error'

@@ -98,6 +98,14 @@ export default function App() {
 
     let acc = ''
     let currentTrace: TraceEvent[] = []
+    let reasoningAcc = ''
+    let reasoningId: string | null = null
+
+    const settleReasoning = () => {
+      if (reasoningId) {
+        updateTrace(reasoningId, { status: 'ok', meta: `思考 ${reasoningAcc.length} 字` })
+      }
+    }
 
     const pushTrace = (event: Omit<TraceEvent, 'id' | 'ts'>) => {
       const item: TraceEvent = { ...event, id: uid('t'), ts: Date.now() }
@@ -106,6 +114,13 @@ export default function App() {
         prev.map((m) => (m.id === assistantId ? { ...m, trace: currentTrace } : m)),
       )
       return item
+    }
+
+    const updateTrace = (id: string, patch: Partial<TraceEvent>) => {
+      currentTrace = currentTrace.map((t) => (t.id === id ? { ...t, ...patch } : t))
+      setMessages((prev) =>
+        prev.map((m) => (m.id === assistantId ? { ...m, trace: currentTrace } : m)),
+      )
     }
 
     const patchAssistant = (patch: Partial<ChatMessage>) => {
@@ -169,13 +184,29 @@ export default function App() {
             })
             patchAssistant({ sources: list })
           },
+          onReasoning: (delta) => {
+            // 思考型模型（qwen3 等）的思考增量：流式显示在执行过程面板
+            reasoningAcc += delta
+            if (!reasoningId) {
+              reasoningId = pushTrace({
+                kind: 'reasoning',
+                title: '深度思考',
+                detail: reasoningAcc,
+                status: 'run',
+              }).id
+            } else {
+              updateTrace(reasoningId, { detail: reasoningAcc })
+            }
+          },
           onToken: (token) => {
+            settleReasoning()
             acc += token
             patchAssistant({ content: acc, streaming: true })
           },
           onDone: (d) => {
             if (d.session_id) sessionIdRef.current = d.session_id
             const answer = d.answer || acc
+            settleReasoning()
             pushTrace({
               kind: 'done',
               title: '生成完成',

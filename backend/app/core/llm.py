@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, AsyncIterator
 
 import httpx
@@ -17,6 +18,21 @@ from app.core.config import settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+@dataclass(slots=True)
+class StreamChunk:
+    """流式增量：kind = reasoning（模型思考，如 qwen3 reasoning_content）| content（正式回答）。"""
+
+    kind: str
+    text: str
+
+
+def _apply_thinking(payload: dict[str, Any]) -> None:
+    """思考型模型开关（DashScope qwen3 等）：auto 不下发参数跟随端点默认。"""
+    thinking = settings.llm_enable_thinking.strip().lower()
+    if thinking in {"true", "false"}:
+        payload["enable_thinking"] = thinking == "true"
 
 
 class BaseLLM(ABC):
@@ -40,7 +56,7 @@ class BaseLLM(ABC):
         temperature: float = 0.2,
         max_tokens: int = 800,
         usage_out: dict[str, Any] | None = None,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[StreamChunk]:
         ...
 
     @abstractmethod
@@ -85,6 +101,7 @@ class OpenAICompatLLM(BaseLLM):
             "max_tokens": max_tokens,
             "messages": [{"role": "system", "content": system}, *messages],
         }
+        _apply_thinking(payload)
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{self.base_url}/chat/completions",
@@ -111,7 +128,7 @@ class OpenAICompatLLM(BaseLLM):
         temperature: float = 0.2,
         max_tokens: int = 800,
         usage_out: dict[str, Any] | None = None,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[StreamChunk]:
         base_payload = {
             "model": self.model,
             "temperature": temperature,
@@ -119,8 +136,9 @@ class OpenAICompatLLM(BaseLLM):
             "stream": True,
             "messages": [{"role": "system", "content": system}, *messages],
         }
+        _apply_thinking(base_payload)
 
-        async def _attempt(include_usage: bool) -> AsyncIterator[str]:
+        async def _attempt(include_usage: bool) -> AsyncIterator[StreamChunk]:
             payload = dict(base_payload)
             if include_usage:
                 # 部分端点不支持该参数（会 400），由外层捕获后去掉重试
@@ -151,10 +169,15 @@ class OpenAICompatLLM(BaseLLM):
                                 usage_out["estimated"] = False
                                 got_usage = True
                             delta = obj["choices"][0].get("delta", {})
+                            # 思考型模型（qwen3 / DeepSeek-R1 等）：思考先于正文产出，
+                            # 透出为 reasoning 增量，避免用户在思考阶段长时间无反馈
+                            reasoning = delta.get("reasoning_content")
+                            if reasoning:
+                                yield StreamChunk("reasoning", reasoning)
                             content = delta.get("content")
                             if content:
                                 parts.append(content)
-                                yield content
+                                yield StreamChunk("content", content)
                         except (json.JSONDecodeError, KeyError, IndexError):
                             continue
             if usage_out is not None and not got_usage:
@@ -222,13 +245,13 @@ class MockLLM(BaseLLM):
         temperature: float = 0.2,
         max_tokens: int = 800,
         usage_out: dict[str, Any] | None = None,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[StreamChunk]:
         text = await self.chat(system, messages, temperature, max_tokens, usage_out)
         # 模拟流式：按句切分
         parts = re.split(r"(?<=[。！？\n])", text)
         for p in parts:
             if p:
-                yield p
+                yield StreamChunk("content", p)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         # 确定性伪向量：字符 unigram + 2-gram 哈希，保证本地可检索

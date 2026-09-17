@@ -1,0 +1,5 @@
+{"id": "b01", "question": "保温杯能直接煮鸡蛋吗？", "intent": "product_inquiry", "golden_doc_id": "thermos-cup", "golden_keywords": ["煮"], "category": "hallucinated", "source_trace_id": null, "note": "知识库未覆盖的诱导性问题，回答不得编造煮制方法"}
+{"id": "b02", "question": "我买的手机屏幕碎了你们必须赔", "intent": "complaint", "golden_doc_id": null, "golden_keywords": ["抱歉", "人工"], "category": "wrong_intent", "source_trace_id": null, "note": "投诉+损坏归责混合表述，易被误判为 fallback"}
+{"id": "b03", "question": "查一下订单 ORD99999999", "intent": "order_query", "golden_doc_id": null, "golden_keywords": ["没有", "核对"], "category": "tool_fail", "source_trace_id": null, "note": "不存在的订单号，期望工具 found=false 并礼貌兜底"}
+{"id": "b04", "question": "asdfghjkl", "intent": "fallback", "golden_doc_id": null, "golden_keywords": [], "category": "low_conf", "source_trace_id": null, "note": "乱码输入，期望 fallback 引导而非硬答"}
+{"id": "b05", "question": "618 满减是全场无门槛直接减吗？", "intent": "promotion_query", "golden_doc_id": "618-rules", "golden_keywords": ["门槛", "满"], "category": "hallucinated", "source_trace_id": null, "note": "诱导确认错误前提，期望依据活动规则纠正"}

@@ -1,0 +1,113 @@
+{
+  "generated_at": "2026-09-18 02:03:34",
+  "mode": "regress(badcases)",
+  "model": "qwen3.7-flash",
+  "prompt_version": "v1",
+  "cases_n": 5,
+  "retrieval": {
+    "recall_at_5": 1.0,
+    "n": 2,
+    "hits": 2,
+    "avg_top_score": 0.5227,
+    "per_case": [
+      {
+        "id": "b01",
+        "hit": true,
+        "top_doc": "thermos-cup#s0c0"
+      },
+      {
+        "id": "b05",
+        "hit": true,
+        "top_doc": "seasonal#s0c0"
+      }
+    ]
+  },
+  "end2end": {
+    "intent_accuracy": 1.0,
+    "citation_coverage": 1.0,
+    "citation_n": 2,
+    "confidence_histogram": {
+      "0.8-1.0": 5
+    },
+    "fallback_rate": 0.2,
+    "latency_avg_ms": 14933.4,
+    "judge": {
+      "n": 3,
+      "accuracy": 1.0,
+      "hallucination_rate": 0.0,
+      "faithfulness": 0.6667,
+      "skipped": false
+    },
+    "per_case": [
+      {
+        "id": "b01",
+        "question": "保温杯能直接煮鸡蛋吗？",
+        "intent": "product_inquiry",
+        "intent_expected": "product_inquiry",
+        "intent_ok": true,
+        "confidence": 0.95,
+        "sources_n": 2,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "partial"
+        },
+        "latency_ms": 23048.3
+      },
+      {
+        "id": "b02",
+        "question": "我买的手机屏幕碎了你们必须赔",
+        "intent": "complaint",
+        "intent_expected": "complaint",
+        "intent_ok": true,
+        "confidence": 0.95,
+        "sources_n": 0,
+        "citation_ok": null,
+        "judge": null,
+        "latency_ms": 16554.2
+      },
+      {
+        "id": "b03",
+        "question": "查一下订单 ORD99999999",
+        "intent": "order_query",
+        "intent_expected": "order_query",
+        "intent_ok": true,
+        "confidence": 0.98,
+        "sources_n": 0,
+        "citation_ok": null,
+        "judge": {
+          "correct": true,
+          "faithful": "partial"
+        },
+        "latency_ms": 16252.1
+      },
+      {
+        "id": "b04",
+        "question": "asdfghjkl",
+        "intent": "fallback",
+        "intent_expected": "fallback",
+        "intent_ok": true,
+        "confidence": 0.95,
+        "sources_n": 0,
+        "citation_ok": null,
+        "judge": null,
+        "latency_ms": 6178.2
+      },
+      {
+        "id": "b05",
+        "question": "618 满减是全场无门槛直接减吗？",
+        "intent": "promotion_query",
+        "intent_expected": "promotion_query",
+        "intent_ok": true,
+        "confidence": 0.86,
+        "sources_n": 5,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "faithful"
+        },
+        "latency_ms": 12634.3
+      }
+    ]
+  }
+}

@@ -27,7 +27,9 @@ class BaseLLM(ABC):
         messages: list[dict[str, str]],
         temperature: float = 0.2,
         max_tokens: int = 800,
+        usage_out: dict[str, Any] | None = None,
     ) -> str:
+        """usage_out 非空时填充 {prompt_tokens, completion_tokens, estimated}。"""
         ...
 
     @abstractmethod
@@ -37,12 +39,23 @@ class BaseLLM(ABC):
         messages: list[dict[str, str]],
         temperature: float = 0.2,
         max_tokens: int = 800,
+        usage_out: dict[str, Any] | None = None,
     ) -> AsyncIterator[str]:
         ...
 
     @abstractmethod
     async def embed(self, texts: list[str]) -> list[list[float]]:
         ...
+
+
+def _fill_usage_estimated(usage_out: dict[str, Any] | None, system: str, messages: list[dict[str, str]], answer: str) -> None:
+    """端点未返回 usage 时按字符数/2 估算，并打 estimated 标记。"""
+    if usage_out is None:
+        return
+    prompt_chars = len(system) + sum(len(m.get("content", "")) for m in messages)
+    usage_out.setdefault("prompt_tokens", prompt_chars // 2)
+    usage_out.setdefault("completion_tokens", len(answer) // 2)
+    usage_out["estimated"] = True
 
 
 class OpenAICompatLLM(BaseLLM):
@@ -64,6 +77,7 @@ class OpenAICompatLLM(BaseLLM):
         messages: list[dict[str, str]],
         temperature: float = 0.2,
         max_tokens: int = 800,
+        usage_out: dict[str, Any] | None = None,
     ) -> str:
         payload = {
             "model": self.model,
@@ -79,7 +93,16 @@ class OpenAICompatLLM(BaseLLM):
             )
             resp.raise_for_status()
             data = resp.json()
-            return data["choices"][0]["message"]["content"]
+            answer = data["choices"][0]["message"]["content"]
+            if usage_out is not None:
+                usage = data.get("usage") or {}
+                if usage.get("prompt_tokens") is not None:
+                    usage_out["prompt_tokens"] = int(usage["prompt_tokens"])
+                    usage_out["completion_tokens"] = int(usage.get("completion_tokens") or 0)
+                    usage_out["estimated"] = False
+                else:
+                    _fill_usage_estimated(usage_out, system, messages, answer)
+            return answer
 
     async def chat_stream(
         self,
@@ -87,36 +110,65 @@ class OpenAICompatLLM(BaseLLM):
         messages: list[dict[str, str]],
         temperature: float = 0.2,
         max_tokens: int = 800,
+        usage_out: dict[str, Any] | None = None,
     ) -> AsyncIterator[str]:
-        payload = {
+        base_payload = {
             "model": self.model,
             "temperature": temperature,
             "max_tokens": max_tokens,
             "stream": True,
             "messages": [{"role": "system", "content": system}, *messages],
         }
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            async with client.stream(
-                "POST",
-                f"{self.base_url}/chat/completions",
-                headers=self._headers(),
-                json=payload,
-            ) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line or not line.startswith("data:"):
-                        continue
-                    chunk = line[5:].strip()
-                    if chunk == "[DONE]":
-                        break
-                    try:
-                        obj = json.loads(chunk)
-                        delta = obj["choices"][0].get("delta", {})
-                        content = delta.get("content")
-                        if content:
-                            yield content
-                    except (json.JSONDecodeError, KeyError, IndexError):
-                        continue
+
+        async def _attempt(include_usage: bool) -> AsyncIterator[str]:
+            payload = dict(base_payload)
+            if include_usage:
+                # 部分端点不支持该参数（会 400），由外层捕获后去掉重试
+                payload["stream_options"] = {"include_usage": True}
+            got_usage = False
+            parts: list[str] = []
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                async with client.stream(
+                    "POST",
+                    f"{self.base_url}/chat/completions",
+                    headers=self._headers(),
+                    json=payload,
+                ) as resp:
+                    resp.raise_for_status()
+                    async for line in resp.aiter_lines():
+                        if not line or not line.startswith("data:"):
+                            continue
+                        chunk = line[5:].strip()
+                        if chunk == "[DONE]":
+                            break
+                        try:
+                            obj = json.loads(chunk)
+                            if usage_out is not None and obj.get("usage"):
+                                usage_out["prompt_tokens"] = int(obj["usage"].get("prompt_tokens") or 0)
+                                usage_out["completion_tokens"] = int(
+                                    obj["usage"].get("completion_tokens") or 0
+                                )
+                                usage_out["estimated"] = False
+                                got_usage = True
+                            delta = obj["choices"][0].get("delta", {})
+                            content = delta.get("content")
+                            if content:
+                                parts.append(content)
+                                yield content
+                        except (json.JSONDecodeError, KeyError, IndexError):
+                            continue
+            if usage_out is not None and not got_usage:
+                _fill_usage_estimated(usage_out, system, messages, "".join(parts))
+
+        try:
+            async for token in _attempt(True):
+                yield token
+        except httpx.HTTPStatusError as e:
+            # 400 只会发生在首字节前（raise_for_status 处），尚无 token 产出，重试安全
+            if e.response.status_code != 400:
+                raise
+            async for token in _attempt(False):
+                yield token
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         payload = {"model": self.embedding_model, "input": texts}
@@ -144,6 +196,7 @@ class MockLLM(BaseLLM):
         messages: list[dict[str, str]],
         temperature: float = 0.2,
         max_tokens: int = 800,
+        usage_out: dict[str, Any] | None = None,
     ) -> str:
         user_msg = next(
             (m["content"] for m in reversed(messages) if m.get("role") == "user"),
@@ -151,10 +204,16 @@ class MockLLM(BaseLLM):
         )
         # 仅当系统提示明确是意图分类任务时才返回 JSON
         if ("可选意图" in system or "intent_id" in system) and "当前意图" not in system:
-            return self._mock_intent(user_msg)
-        if "重排" in system or "rerank" in system.lower():
-            return "0.82"
-        return self._mock_answer(user_msg, system)
+            answer = self._mock_intent(user_msg)
+        elif "重排" in system or "rerank" in system.lower():
+            answer = "0.82"
+        elif "摘要" in system and "压缩" in system:
+            # 摘要请求：返回截断的对话要点，避免客服话术污染 session.summary
+            answer = user_msg[:80]
+        else:
+            answer = self._mock_answer(user_msg, system)
+        _fill_usage_estimated(usage_out, system, messages, answer)
+        return answer
 
     async def chat_stream(
         self,
@@ -162,8 +221,9 @@ class MockLLM(BaseLLM):
         messages: list[dict[str, str]],
         temperature: float = 0.2,
         max_tokens: int = 800,
+        usage_out: dict[str, Any] | None = None,
     ) -> AsyncIterator[str]:
-        text = await self.chat(system, messages, temperature, max_tokens)
+        text = await self.chat(system, messages, temperature, max_tokens, usage_out)
         # 模拟流式：按句切分
         parts = re.split(r"(?<=[。！？\n])", text)
         for p in parts:
@@ -271,7 +331,7 @@ class MockLLM(BaseLLM):
                 f"{base}该商品支持主流使用场景，并提供 7 天无理由退换（未拆封）。"
                 "详细参数以商品页与说明书为准。"
             )
-        if "found" in system and "False" in system:
+        if "found" in system and ("False" in system or "false" in system):
             return "抱歉，没有查到对应记录，请核对单号，或提供更多信息后我再帮您查一次。"
         return (
             "您好，我是电商智能客服。可以帮您处理订单查询、物流追踪、商品咨询、"

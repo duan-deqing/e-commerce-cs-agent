@@ -1,0 +1,585 @@
+{
+  "generated_at": "2026-09-18 02:17:47",
+  "mode": "full",
+  "model": "qwen3.7-flash",
+  "prompt_version": "v1",
+  "cases_n": 30,
+  "retrieval": {
+    "recall_at_5": 1.0,
+    "n": 25,
+    "hits": 25,
+    "avg_top_score": 0.572,
+    "per_case": [
+      {
+        "id": "e01",
+        "hit": true,
+        "top_doc": "thermos-cup#s2c0"
+      },
+      {
+        "id": "e02",
+        "hit": true,
+        "top_doc": "thermos-cup#s1c0"
+      },
+      {
+        "id": "e03",
+        "hit": true,
+        "top_doc": "thermos-cup#s1c0"
+      },
+      {
+        "id": "e04",
+        "hit": true,
+        "top_doc": "smartphone#s1c0"
+      },
+      {
+        "id": "e05",
+        "hit": true,
+        "top_doc": "smartphone#s2c0"
+      },
+      {
+        "id": "e06",
+        "hit": true,
+        "top_doc": "smartphone#s4c0"
+      },
+      {
+        "id": "e07",
+        "hit": true,
+        "top_doc": "running-shoes#s3c0"
+      },
+      {
+        "id": "e08",
+        "hit": true,
+        "top_doc": "running-shoes#s4c0"
+      },
+      {
+        "id": "e09",
+        "hit": true,
+        "top_doc": "common-faq#s4c0"
+      },
+      {
+        "id": "e10",
+        "hit": true,
+        "top_doc": "common-faq#s4c0"
+      },
+      {
+        "id": "e11",
+        "hit": true,
+        "top_doc": "common-faq#s1c0"
+      },
+      {
+        "id": "e12",
+        "hit": true,
+        "top_doc": "common-faq#s7c0"
+      },
+      {
+        "id": "e13",
+        "hit": true,
+        "top_doc": "common-faq#s8c0"
+      },
+      {
+        "id": "e14",
+        "hit": true,
+        "top_doc": "common-faq#s3c0"
+      },
+      {
+        "id": "e15",
+        "hit": true,
+        "top_doc": "common-faq#s2c0"
+      },
+      {
+        "id": "e16",
+        "hit": true,
+        "top_doc": "common-faq#s1c0"
+      },
+      {
+        "id": "e17",
+        "hit": true,
+        "top_doc": "618-rules#s2c0"
+      },
+      {
+        "id": "e18",
+        "hit": true,
+        "top_doc": "618-rules#s2c0"
+      },
+      {
+        "id": "e19",
+        "hit": true,
+        "top_doc": "618-rules#s3c0"
+      },
+      {
+        "id": "e20",
+        "hit": true,
+        "top_doc": "seasonal#s0c0"
+      },
+      {
+        "id": "e21",
+        "hit": true,
+        "top_doc": "seasonal#s1c0"
+      },
+      {
+        "id": "e27",
+        "hit": true,
+        "top_doc": "618-rules#s3c0"
+      },
+      {
+        "id": "e28",
+        "hit": true,
+        "top_doc": "thermos-cup#s0c0"
+      },
+      {
+        "id": "e29",
+        "hit": true,
+        "top_doc": "smartphone#s0c0"
+      },
+      {
+        "id": "e30",
+        "hit": true,
+        "top_doc": "running-shoes#s0c0"
+      }
+    ]
+  },
+  "end2end": {
+    "intent_accuracy": 0.9333,
+    "citation_coverage": 0.68,
+    "citation_n": 25,
+    "confidence_histogram": {
+      "0.8-1.0": 30
+    },
+    "fallback_rate": 0.0667,
+    "latency_avg_ms": 14398.2,
+    "judge": {
+      "n": 22,
+      "accuracy": 1.0,
+      "hallucination_rate": 0.0,
+      "faithfulness": 0.7273,
+      "skipped": false
+    },
+    "per_case": [
+      {
+        "id": "e01",
+        "question": "保温杯的保温效果能持续多久？",
+        "intent": "product_inquiry",
+        "intent_expected": "product_inquiry",
+        "intent_ok": true,
+        "confidence": 0.95,
+        "sources_n": 5,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "partial"
+        },
+        "latency_ms": 20330.1
+      },
+      {
+        "id": "e02",
+        "question": "保温杯可以装碳酸饮料吗？",
+        "intent": "product_inquiry",
+        "intent_expected": "product_inquiry",
+        "intent_ok": true,
+        "confidence": 0.95,
+        "sources_n": 3,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "partial"
+        },
+        "latency_ms": 23974.8
+      },
+      {
+        "id": "e03",
+        "question": "保温杯怎么清洗保养？",
+        "intent": "product_inquiry",
+        "intent_expected": "product_inquiry",
+        "intent_ok": true,
+        "confidence": 0.95,
+        "sources_n": 3,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "partial"
+        },
+        "latency_ms": 23342.9
+      },
+      {
+        "id": "e04",
+        "question": "这款手机支持快充吗？",
+        "intent": "product_inquiry",
+        "intent_expected": "product_inquiry",
+        "intent_ok": true,
+        "confidence": 0.95,
+        "sources_n": 5,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "faithful"
+        },
+        "latency_ms": 19411.8
+      },
+      {
+        "id": "e05",
+        "question": "手机支持无线充电和双卡吗？",
+        "intent": "product_inquiry",
+        "intent_expected": "product_inquiry",
+        "intent_ok": true,
+        "confidence": 0.95,
+        "sources_n": 5,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "faithful"
+        },
+        "latency_ms": 17790.6
+      },
+      {
+        "id": "e06",
+        "question": "手机的保修期是多久？",
+        "intent": "product_inquiry",
+        "intent_expected": "product_inquiry",
+        "intent_ok": true,
+        "confidence": 0.95,
+        "sources_n": 5,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "faithful"
+        },
+        "latency_ms": 15806.6
+      },
+      {
+        "id": "e07",
+        "question": "跑步鞋会不会偏码？",
+        "intent": "product_inquiry",
+        "intent_expected": "product_inquiry",
+        "intent_ok": true,
+        "confidence": 0.95,
+        "sources_n": 4,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "partial"
+        },
+        "latency_ms": 19755.3
+      },
+      {
+        "id": "e08",
+        "question": "跑步鞋防水吗？怎么保养？",
+        "intent": "product_inquiry",
+        "intent_expected": "product_inquiry",
+        "intent_ok": true,
+        "confidence": 0.95,
+        "sources_n": 4,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "faithful"
+        },
+        "latency_ms": 19789.5
+      },
+      {
+        "id": "e09",
+        "question": "退货流程是什么？",
+        "intent": "after_sales_return",
+        "intent_expected": "after_sales_return",
+        "intent_ok": true,
+        "confidence": 0.88,
+        "sources_n": 0,
+        "citation_ok": false,
+        "judge": null,
+        "latency_ms": 0.7
+      },
+      {
+        "id": "e10",
+        "question": "退款多久能到账？",
+        "intent": "refund_query",
+        "intent_expected": "refund_query",
+        "intent_ok": true,
+        "confidence": 0.85,
+        "sources_n": 0,
+        "citation_ok": false,
+        "judge": {
+          "correct": true,
+          "faithful": "partial"
+        },
+        "latency_ms": 8996.1
+      },
+      {
+        "id": "e11",
+        "question": "什么情况不能退货？",
+        "intent": "after_sales_return",
+        "intent_expected": "after_sales_return",
+        "intent_ok": true,
+        "confidence": 0.88,
+        "sources_n": 0,
+        "citation_ok": false,
+        "judge": null,
+        "latency_ms": 0.9
+      },
+      {
+        "id": "e12",
+        "question": "支持哪些支付方式？",
+        "intent": "fallback",
+        "intent_expected": "product_inquiry",
+        "intent_ok": false,
+        "confidence": 0.8,
+        "sources_n": 0,
+        "citation_ok": false,
+        "judge": null,
+        "latency_ms": 16699.1
+      },
+      {
+        "id": "e13",
+        "question": "发票怎么开？",
+        "intent": "fallback",
+        "intent_expected": "product_inquiry",
+        "intent_ok": false,
+        "confidence": 0.9,
+        "sources_n": 0,
+        "citation_ok": false,
+        "judge": null,
+        "latency_ms": 12615.9
+      },
+      {
+        "id": "e14",
+        "question": "可以修改收货地址吗？",
+        "intent": "order_query",
+        "intent_expected": "order_query",
+        "intent_ok": true,
+        "confidence": 0.9,
+        "sources_n": 0,
+        "citation_ok": false,
+        "judge": {
+          "correct": true,
+          "faithful": "partial"
+        },
+        "latency_ms": 21215.4
+      },
+      {
+        "id": "e15",
+        "question": "物流长时间不更新怎么办？",
+        "intent": "logistics_query",
+        "intent_expected": "logistics_query",
+        "intent_ok": true,
+        "confidence": 0.84,
+        "sources_n": 0,
+        "citation_ok": false,
+        "judge": {
+          "correct": true,
+          "faithful": "partial"
+        },
+        "latency_ms": 15911.6
+      },
+      {
+        "id": "e16",
+        "question": "订单可以取消吗？",
+        "intent": "order_query",
+        "intent_expected": "order_query",
+        "intent_ok": true,
+        "confidence": 0.95,
+        "sources_n": 0,
+        "citation_ok": false,
+        "judge": {
+          "correct": true,
+          "faithful": "faithful"
+        },
+        "latency_ms": 18572.5
+      },
+      {
+        "id": "e17",
+        "question": "618 满减规则是什么？",
+        "intent": "promotion_query",
+        "intent_expected": "promotion_query",
+        "intent_ok": true,
+        "confidence": 0.86,
+        "sources_n": 4,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "faithful"
+        },
+        "latency_ms": 11013.7
+      },
+      {
+        "id": "e18",
+        "question": "618 有优惠券可以领吗？",
+        "intent": "promotion_query",
+        "intent_expected": "promotion_query",
+        "intent_ok": true,
+        "confidence": 0.86,
+        "sources_n": 5,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "faithful"
+        },
+        "latency_ms": 13409.2
+      },
+      {
+        "id": "e19",
+        "question": "618 支持价保吗？",
+        "intent": "promotion_query",
+        "intent_expected": "promotion_query",
+        "intent_ok": true,
+        "confidence": 0.86,
+        "sources_n": 5,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "partial"
+        },
+        "latency_ms": 9175.2
+      },
+      {
+        "id": "e20",
+        "question": "新人有什么专享优惠？",
+        "intent": "promotion_query",
+        "intent_expected": "promotion_query",
+        "intent_ok": true,
+        "confidence": 0.86,
+        "sources_n": 5,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "partial"
+        },
+        "latency_ms": 13339.9
+      },
+      {
+        "id": "e21",
+        "question": "春季有什么鞋服活动？",
+        "intent": "promotion_query",
+        "intent_expected": "promotion_query",
+        "intent_ok": true,
+        "confidence": 0.86,
+        "sources_n": 2,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "faithful"
+        },
+        "latency_ms": 19262.8
+      },
+      {
+        "id": "e22",
+        "question": "你好",
+        "intent": "greeting",
+        "intent_expected": "greeting",
+        "intent_ok": true,
+        "confidence": 0.92,
+        "sources_n": 0,
+        "citation_ok": null,
+        "judge": null,
+        "latency_ms": 1.5
+      },
+      {
+        "id": "e23",
+        "question": "转人工",
+        "intent": "human_handoff",
+        "intent_expected": "human_handoff",
+        "intent_ok": true,
+        "confidence": 0.96,
+        "sources_n": 0,
+        "citation_ok": null,
+        "judge": null,
+        "latency_ms": 0.6
+      },
+      {
+        "id": "e24",
+        "question": "查询订单 ORD20260301001",
+        "intent": "order_query",
+        "intent_expected": "order_query",
+        "intent_ok": true,
+        "confidence": 0.95,
+        "sources_n": 0,
+        "citation_ok": null,
+        "judge": null,
+        "latency_ms": 18762.2
+      },
+      {
+        "id": "e25",
+        "question": "物流到哪了 YT1234567890",
+        "intent": "logistics_query",
+        "intent_expected": "logistics_query",
+        "intent_ok": true,
+        "confidence": 0.84,
+        "sources_n": 0,
+        "citation_ok": null,
+        "judge": {
+          "correct": true,
+          "faithful": "partial"
+        },
+        "latency_ms": 10809.9
+      },
+      {
+        "id": "e26",
+        "question": "我要退货 ORD20260301001 因为尺码不合适",
+        "intent": "after_sales_return",
+        "intent_expected": "after_sales_return",
+        "intent_ok": true,
+        "confidence": 0.88,
+        "sources_n": 0,
+        "citation_ok": null,
+        "judge": null,
+        "latency_ms": 0.8
+      },
+      {
+        "id": "e27",
+        "question": "618 活动什么时候结束？",
+        "intent": "promotion_query",
+        "intent_expected": "promotion_query",
+        "intent_ok": true,
+        "confidence": 0.86,
+        "sources_n": 3,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "faithful"
+        },
+        "latency_ms": 12248.2
+      },
+      {
+        "id": "e28",
+        "question": "保温杯的材质安全吗？",
+        "intent": "product_inquiry",
+        "intent_expected": "product_inquiry",
+        "intent_ok": true,
+        "confidence": 0.95,
+        "sources_n": 4,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "partial"
+        },
+        "latency_ms": 20288.4
+      },
+      {
+        "id": "e29",
+        "question": "手机的电池容量多大？",
+        "intent": "product_inquiry",
+        "intent_expected": "product_inquiry",
+        "intent_ok": true,
+        "confidence": 0.95,
+        "sources_n": 5,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "faithful"
+        },
+        "latency_ms": 21894.1
+      },
+      {
+        "id": "e30",
+        "question": "跑步鞋适合马拉松吗？",
+        "intent": "product_inquiry",
+        "intent_expected": "product_inquiry",
+        "intent_ok": true,
+        "confidence": 0.95,
+        "sources_n": 3,
+        "citation_ok": true,
+        "judge": {
+          "correct": true,
+          "faithful": "partial"
+        },
+        "latency_ms": 27527.0
+      }
+    ]
+  }
+}

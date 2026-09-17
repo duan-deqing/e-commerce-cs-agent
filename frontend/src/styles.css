@@ -338,6 +338,11 @@ a:focus-visible {
   align-items: flex-start;
 }
 
+/* Agent 回答气泡固定为最宽宽度，不随内容收缩 */
+.msg.assistant .bubble {
+  width: var(--asst-w);
+}
+
 .bubble {
   position: relative;
   max-width: var(--asst-w);
@@ -397,7 +402,7 @@ a:focus-visible {
 
 /* Agent 消息附加区：来源 / 工具 / 执行过程 */
 .attach {
-  max-width: var(--asst-w);
+  width: var(--asst-w);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -586,7 +591,7 @@ a:focus-visible {
 
 /* ——— 可折叠执行过程面板（位于回答上方） ——— */
 .trace {
-  max-width: var(--asst-w);
+  width: var(--asst-w);
   border: 1px solid var(--line-soft);
   border-radius: var(--r-md);
   background: var(--surface-2);
@@ -958,6 +963,12 @@ a:focus-visible {
   .msg .trace,
   .msg .attach {
     max-width: 88%;
+  }
+
+  .msg.assistant .bubble,
+  .msg.assistant .trace,
+  .msg.assistant .attach {
+    width: 88%;
   }
 
   .composer {

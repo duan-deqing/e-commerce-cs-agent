@@ -113,14 +113,15 @@ backend/
 │   │   ├── routes_admin.py     # intents/tools/sessions/metrics/reindex
 │   │   └── routes_health.py    # 健康检查
 │   ├── agent/
-│   │   ├── orchestrator.py     # 入口：会话准备 + 意图 + 流式/非流式
+│   │   ├── orchestrator.py     # 入口：会话准备 + 意图 + 流式/非流式 + trace 收尾
 │   │   ├── pipeline.py         # 统一流水线：工具 → RAG → 生成
 │   │   ├── continuity.py       # 售后确认态会话继承
 │   │   ├── after_sales_flow.py # 售后追问/建单/风控短路
+│   │   ├── summarizer.py       # 上下文摘要压缩（滑动窗口将满时触发）
 │   │   ├── sql_agent/          # 模板化 SQL Agent（参数绑定，禁拼接）
 │   │   │   ├── templates.py
 │   │   │   └── agent.py
-│   │   ├── prompts.py          # 系统提示词
+│   │   ├── prompts.py          # 系统提示词（稳定前缀 + 版本注册表/灰度路由）
 │   │   └── fallback.py         # 降级与模板回答
 │   ├── intent/
 │   │   ├── labels.py           # 12 类意图定义
@@ -143,12 +144,16 @@ backend/
 │   ├── services/               # 业务服务（经 SQL Agent 访问库）
 │   ├── db/                     # SQLite 连接 / Schema / Seed
 │   ├── risk/                   # 脱敏、退款风控
-│   ├── state/session.py        # 会话窗口 + 售后状态机
+│   ├── state/session.py        # 会话窗口 + 摘要 + 售后状态机
 │   ├── schemas/chat.py         # 请求/响应模型
-│   └── core/                   # config / llm / logging / metrics
+│   └── core/                   # config / llm / logging / metrics / tracing
+├── evals/                      # 离线评测：dataset.jsonl / badcases.jsonl / 报告
 ├── data/                       # mock 业务 JSON
 ├── knowledge/                  # RAG 语料（商品/FAQ/活动）
-├── scripts/smoke_test.py
+├── scripts/
+│   ├── smoke_test.py           # 端到端冒烟（Mock LLM）
+│   ├── run_eval.py             # 离线评测：Recall@5 / 覆盖率 / judge / 坏案例回归
+│   └── verify_p2.py            # 上下文工程验证（摘要触发 / 前缀稳定）
 ├── requirements.txt
 ├── run.py
 └── .env.example
@@ -160,11 +165,12 @@ backend/
 
 | 模块 | 职责 | 调用方 |
 |------|------|--------|
-| `orchestrator.py` | 会话准备、脱敏、意图分类；非流式返回完整 JSON；流式用 Queue 转发 SSE | `api/routes_chat.py` |
-| `pipeline.py` | 统一流水线：快捷回复 → 售后预检 → 工具并行 → RAG → LLM 生成 | `orchestrator` |
+| `orchestrator.py` | 会话准备、脱敏、摘要触发、意图分类；非流式返回完整 JSON；流式用 Queue 转发 SSE；`_finalize` 统一记录 tokens/cost/转接/坏案例并落库 trace | `api/routes_chat.py` |
+| `pipeline.py` | 统一流水线：快捷回复 → 售后预检 → 工具并行（≤4 次护栏）→ RAG → LLM 生成（max_output_tokens 上限） | `orchestrator` |
 | `continuity.py` | 「确认/取消」与售后确认态下的意图继承 | `orchestrator` |
 | `after_sales_flow.py` | 缺参追问、确认建单、风控/建单短路话术 | `pipeline` |
-| `prompts.py` | 系统提示词与工具/知识块格式化 | `pipeline` |
+| `summarizer.py` | 滑动窗口将满时把早期对话压缩为 ≤80 字摘要，随历史注入；失败仅降级 | `orchestrator` |
+| `prompts.py` | 稳定前缀 + 动态块拼装（可命中 provider 前缀缓存）；PROMPT_VERSIONS 版本注册表与 crc32 灰度路由；工具结果结构化 JSON 行 | `pipeline` |
 | `fallback.py` | 寒暄/转人工/兜底/工具失败模板回答 | `pipeline` |
 
 调用链：
@@ -193,7 +199,7 @@ routes_chat
 | GET | `/api/v1/tools` | 已注册工具 |
 | GET | `/api/v1/sessions/{session_id}` | 会话摘要（意图/实体/售后状态） |
 | POST | `/api/v1/knowledge/reindex` | 重建向量知识库 |
-| GET | `/api/v1/metrics` | 请求量、意图分布、延迟、工具成功率 |
+| GET | `/api/v1/metrics` | 请求量、意图分布、P50/P95、TTFT、Token/成本、错误率、转接率、自助解决率、坏案例率 |
 | GET | `/api/v1/sql-templates` | SQL Agent 模板目录 |
 
 ### 非流式对话
@@ -281,6 +287,11 @@ const reader = res.body!.getReader();
 | `CONTEXT_MAX_TURNS` | `12` | 上下文保留轮数 |
 | `TOOL_TIMEOUT_S` | `3.0` | 单工具超时 |
 | `TOOL_MAX_RETRIES` | `2` | 工具最大重试次数 |
+| `MAX_OUTPUT_TOKENS` | `800` | 单次回答输出长度上限 |
+| `LLM_PRICE_PROMPT_PER_1K` | `0.00015` | Prompt Token 单价（$/1k，成本估算） |
+| `LLM_PRICE_COMPLETION_PER_1K` | `0.0006` | 补全 Token 单价（$/1k，成本估算） |
+| `PROMPT_VERSION` | `v1` | 全量 prompt 版本（回滚开关） |
+| `PROMPT_GRAY_PERCENT` | `0` | v2 灰度百分比 0-100（crc32(session_id) 稳定分流） |
 
 ### 对接真实模型（示例）
 
@@ -313,6 +324,47 @@ MOCK_LLM=false
 ```
 
 ---
+
+## 评测与监控（可观测 + 质量闭环）
+
+### 线上监控
+
+- 每条请求生成 `trace_id`（贯穿 SSE 事件），结束后由 `orchestrator._finalize` 旁路落库 `request_trace` 表：
+  模型 / prompt 版本 / 意图与置信度 / 工具与检索片段 / TTFT / 总耗时 / Token 用量与成本 / 转接 / 错误；
+  敏感输入只记录脱敏标记（0/1），不落原文；落库失败仅记日志，不阻塞主链路。
+- `GET /api/v1/metrics` 返回进程内聚合：请求量、意图分布、P50/P95、TTFT P50/P95、错误率、人工转接率、
+  自助解决率（= 1 − 转接率 − 错误率）、坏案例率、Token 用量与成本（端点无 usage 时按字符数估算并标记 `estimated`）。
+- 查询线上指标时排除评测流量：`WHERE user_id != 'eval_user'`（离线评测与线上请求共用 trace 表）。
+
+### 离线评测
+
+```powershell
+python scripts/run_eval.py                # 全量 30 条：Recall@5 / 意图正确率 / 引用覆盖率 / LLM judge
+python scripts/run_eval.py --regress      # 坏案例回归集（5 条），产出 report-regress.json
+python scripts/run_eval.py --skip-judge   # 跳过 LLM judge（Mock 模式自动跳过）
+```
+
+基线（qwen3.7-flash，prompt v1，2026-09-18）：
+
+| 指标 | 结果 |
+|------|------|
+| Recall@5 | 1.0 |
+| 意图正确率 | 0.9333（仅支付方式/发票 2 条落入 fallback，属知识覆盖缺口） |
+| 引用覆盖率 | 0.68（FAQ 类问题被售后/订单工具路径短路，不返回来源） |
+| 幻觉率（judge n=22） | 0.0 |
+| 忠诚度（judge） | 0.7273 |
+| 置信度分布 | 30/30 ≥ 0.8 |
+
+坏案例回归 5/5 未复现，详见 [evals/badcase-regression-report.md](evals/badcase-regression-report.md)。
+
+### 坏案例闭环
+
+```
+线上 trace / 评测发现 → badcases.jsonl 分类入库（hallucinated / wrong_intent / tool_fail / low_conf）
+  → 每次改动后 --regress 回归 → 新版 prompt 注册到 PROMPT_VERSIONS
+  → PROMPT_GRAY_PERCENT=50 灰度（crc32 稳定分流，同一会话版本不变）
+  → 劣化时 PROMPT_VERSION=v1 + PROMPT_GRAY_PERCENT=0 一键回滚
+```
 
 ## 业务数据（SQLite + SQL Agent）
 

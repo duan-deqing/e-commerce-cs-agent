@@ -16,12 +16,15 @@ from app.agent.fallback import (
     template_answer_from_tools,
 )
 from app.agent.prompts import (
-    ANSWER_SYSTEM,
     COMPLAINT_ANSWER,
     LOW_CONF_RAG_ANSWER,
+    PROMPT_VERSIONS,
+    build_answer_system,
     format_sources_block,
     format_tool_block,
+    resolve_prompt_version,
 )
+from app.core.config import settings
 from app.core.llm import get_llm
 from app.core.logging import get_logger
 from app.intent.labels import INTENT_META, Intent
@@ -33,6 +36,9 @@ from app.tools.base import ToolContext, registry, run_parallel
 logger = get_logger(__name__)
 
 EmitFn = Callable[[str, dict[str, Any]], Awaitable[None]]
+
+# 最大工具调用数护栏：单请求工具数上限，防止意图误路由触发工具风暴
+MAX_TOOL_CALLS_PER_REQUEST = 4
 
 
 async def _emit(emit: EmitFn | None, event: str, data: dict[str, Any]) -> None:
@@ -88,6 +94,11 @@ async def run_tools(
 ) -> list[dict[str, Any]]:
     if not tool_names:
         return []
+    if len(tool_names) > MAX_TOOL_CALLS_PER_REQUEST:
+        logger.warning(
+            "tool calls capped: %d -> %d", len(tool_names), MAX_TOOL_CALLS_PER_REQUEST
+        )
+        tool_names = tool_names[:MAX_TOOL_CALLS_PER_REQUEST]
     tools = registry.resolve(tool_names)
     ctx = ToolContext(
         user_id=session.user_id,
@@ -136,20 +147,33 @@ async def generate_answer(
     knowledge_block: str,
     stream: bool = False,
     emit: EmitFn | None = None,
+    usage_out: dict[str, Any] | None = None,
 ) -> str:
-    system = ANSWER_SYSTEM.format(
+    # 灰度路由：按 session 稳定哈希选 prompt 版本，版本随 usage 透传到 trace
+    version = resolve_prompt_version(session.session_id)
+    system = build_answer_system(
         intent_name=meta.get("name", intent_id),
         tool_block=format_tool_block(tool_results),
-        knowledge_block=knowledge_block or "（无）",
+        knowledge_block=knowledge_block,
+        rules=PROMPT_VERSIONS.get(version),
     )
+    if usage_out is not None:
+        usage_out["prompt_version"] = version
     history = session.as_history_messages()[:-1]
     messages = history + [{"role": "user", "content": message}]
     llm = get_llm()
+    max_tokens = settings.max_output_tokens
 
     if stream:
         parts: list[str] = []
         try:
-            async for token in llm.chat_stream(system=system, messages=messages, temperature=0.3):
+            async for token in llm.chat_stream(
+                system=system,
+                messages=messages,
+                temperature=0.3,
+                max_tokens=max_tokens,
+                usage_out=usage_out,
+            ):
                 parts.append(token)
                 await _emit(emit, "token", {"token": token})
             answer = "".join(parts).strip()
@@ -163,7 +187,13 @@ async def generate_answer(
         return answer
 
     try:
-        answer = await llm.chat(system=system, messages=messages, temperature=0.3)
+        answer = await llm.chat(
+            system=system,
+            messages=messages,
+            temperature=0.3,
+            max_tokens=max_tokens,
+            usage_out=usage_out,
+        )
         if not answer or not answer.strip():
             answer = template_answer_from_tools(meta.get("name", ""), tool_results)
     except Exception as e:  # noqa: BLE001
@@ -179,7 +209,8 @@ async def run_pipeline(
     emit: EmitFn | None = None,
     stream: bool = False,
 ) -> dict[str, Any]:
-    """意图之后的主流程；返回 payload，含 answer/tools/sources/handoff。"""
+    """意图之后的主流程；返回 payload，含 answer/tools/sources/handoff/usage。"""
+    usage_out: dict[str, Any] = {}
     try:
         intent_enum = Intent(intent_id)
         meta = INTENT_META.get(intent_enum, {})
@@ -236,6 +267,7 @@ async def run_pipeline(
         knowledge_block=knowledge_block,
         stream=stream,
         emit=emit,
+        usage_out=usage_out,
     )
     answer = mask_sensitive(answer)
 
@@ -245,4 +277,5 @@ async def run_pipeline(
         "sources": sources,
         "handoff": session.handoff,
         "risk_flags": asf.collect_risk_flags(tool_results),
+        "usage": usage_out,
     }

@@ -1,0 +1,30 @@
+{"id": "e01", "question": "保温杯的保温效果能持续多久？", "intent": "product_inquiry", "golden_doc_id": "thermos-cup", "golden_keywords": ["保温", "小时"]}
+{"id": "e02", "question": "保温杯可以装碳酸饮料吗？", "intent": "product_inquiry", "golden_doc_id": "thermos-cup", "golden_keywords": ["碳酸", "饮料"]}
+{"id": "e03", "question": "保温杯怎么清洗保养？", "intent": "product_inquiry", "golden_doc_id": "thermos-cup", "golden_keywords": ["清洗", "保养"]}
+{"id": "e04", "question": "这款手机支持快充吗？", "intent": "product_inquiry", "golden_doc_id": "smartphone", "golden_keywords": ["快充"]}
+{"id": "e05", "question": "手机支持无线充电和双卡吗？", "intent": "product_inquiry", "golden_doc_id": "smartphone", "golden_keywords": ["无线充电", "双卡"]}
+{"id": "e06", "question": "手机的保修期是多久？", "intent": "product_inquiry", "golden_doc_id": "smartphone", "golden_keywords": ["保修"]}
+{"id": "e07", "question": "跑步鞋会不会偏码？", "intent": "product_inquiry", "golden_doc_id": "running-shoes", "golden_keywords": ["偏码", "尺码"]}
+{"id": "e08", "question": "跑步鞋防水吗？怎么保养？", "intent": "product_inquiry", "golden_doc_id": "running-shoes", "golden_keywords": ["防水", "保养"]}
+{"id": "e09", "question": "退货流程是什么？", "intent": "after_sales_return", "golden_doc_id": "common-faq", "golden_keywords": ["退货"]}
+{"id": "e10", "question": "退款多久能到账？", "intent": "refund_query", "golden_doc_id": "common-faq", "golden_keywords": ["退款", "到账"]}
+{"id": "e11", "question": "什么情况不能退货？", "intent": "after_sales_return", "golden_doc_id": "common-faq", "golden_keywords": ["退货"]}
+{"id": "e12", "question": "支持哪些支付方式？", "intent": "product_inquiry", "golden_doc_id": "common-faq", "golden_keywords": ["支付"]}
+{"id": "e13", "question": "发票怎么开？", "intent": "product_inquiry", "golden_doc_id": "common-faq", "golden_keywords": ["发票"]}
+{"id": "e14", "question": "可以修改收货地址吗？", "intent": "order_query", "golden_doc_id": "common-faq", "golden_keywords": ["地址"]}
+{"id": "e15", "question": "物流长时间不更新怎么办？", "intent": "logistics_query", "golden_doc_id": "common-faq", "golden_keywords": ["物流"]}
+{"id": "e16", "question": "订单可以取消吗？", "intent": "order_query", "golden_doc_id": "common-faq", "golden_keywords": ["取消"]}
+{"id": "e17", "question": "618 满减规则是什么？", "intent": "promotion_query", "golden_doc_id": "618-rules", "golden_keywords": ["满减"]}
+{"id": "e18", "question": "618 有优惠券可以领吗？", "intent": "promotion_query", "golden_doc_id": "618-rules", "golden_keywords": ["优惠券"]}
+{"id": "e19", "question": "618 支持价保吗？", "intent": "promotion_query", "golden_doc_id": "618-rules", "golden_keywords": ["价保"]}
+{"id": "e20", "question": "新人有什么专享优惠？", "intent": "promotion_query", "golden_doc_id": "seasonal", "golden_keywords": ["新人"]}
+{"id": "e21", "question": "春季有什么鞋服活动？", "intent": "promotion_query", "golden_doc_id": "seasonal", "golden_keywords": ["春季", "焕新"]}
+{"id": "e22", "question": "你好", "intent": "greeting", "golden_doc_id": null, "golden_keywords": []}
+{"id": "e23", "question": "转人工", "intent": "human_handoff", "golden_doc_id": null, "golden_keywords": []}
+{"id": "e24", "question": "查询订单 ORD20260301001", "intent": "order_query", "golden_doc_id": null, "golden_keywords": ["订单"]}
+{"id": "e25", "question": "物流到哪了 YT1234567890", "intent": "logistics_query", "golden_doc_id": null, "golden_keywords": ["物流", "轨迹"]}
+{"id": "e26", "question": "我要退货 ORD20260301001 因为尺码不合适", "intent": "after_sales_return", "golden_doc_id": null, "golden_keywords": ["退货"]}
+{"id": "e27", "question": "618 活动什么时候结束？", "intent": "promotion_query", "golden_doc_id": "618-rules", "golden_keywords": ["时间", "结束"]}
+{"id": "e28", "question": "保温杯的材质安全吗？", "intent": "product_inquiry", "golden_doc_id": "thermos-cup", "golden_keywords": ["材质"]}
+{"id": "e29", "question": "手机的电池容量多大？", "intent": "product_inquiry", "golden_doc_id": "smartphone", "golden_keywords": ["电池"]}
+{"id": "e30", "question": "跑步鞋适合马拉松吗？", "intent": "product_inquiry", "golden_doc_id": "running-shoes", "golden_keywords": ["跑鞋", "马拉松", "跑步"]}

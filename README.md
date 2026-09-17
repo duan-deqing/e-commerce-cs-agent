@@ -54,9 +54,11 @@ React + TypeScript + Vite，`/api` 已代理到后端 `8000`。设计说明见 [
 ## 核心能力
 
 - 12 类意图识别与智能路由
-- 订单 / 物流 / 售后 / 促销 / 搜索工具并行编排（重试、超时、降级）
+- 订单 / 物流 / 售后 / 促销 / 搜索工具并行编排（重试、超时、降级、单请求 ≤4 次工具护栏）
 - RAG：语义分块、Embedding、ChromaDB、Top-5 重排、来源溯源
-- SSE 流式输出、滑动上下文、退款风控、敏感信息脱敏、LLM 故障降级
+- SSE 流式输出、滑动上下文 + LLM 摘要压缩、输出长度上限、退款风控、敏感信息脱敏、LLM 故障降级
+- 线上监控：全链路 Trace 落库（Trace ID / 模型与 Prompt 版本 / 工具与检索片段 / TTFT / Token 成本），`/metrics` 暴露 P50/P95、首 Token、错误率、转接率、自助解决率、坏案例率
+- 离线评测与坏案例闭环：Recall@5 / 引用覆盖率 / 意图正确率 / LLM judge（准确率·幻觉率·忠诚度），坏案例分类回归 + Prompt 灰度 + 一键回滚
 - 前端：对话窗口式 UI、执行过程可折叠时间线、引用溯源卡（点击展开查看知识库全文与来源文件）
 
-后端 `app/agent/` 为扁平模块（`orchestrator` / `pipeline` / `continuity` / `after_sales_flow` 等），不再分子目录，详见 [backend/README.md](backend/README.md)。
+后端 `app/agent/` 为扁平模块（`orchestrator` / `pipeline` / `continuity` / `after_sales_flow` 等），不再分子目录；评测与监控用法见 [backend/README.md](backend/README.md) 的「评测与监控」一节。

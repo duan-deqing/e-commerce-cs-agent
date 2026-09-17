@@ -47,6 +47,8 @@ class Session:
     last_intent: str | None = None
     after_sales: AfterSalesContext = field(default_factory=AfterSalesContext)
     handoff: bool = False
+    # 超出滑动窗口的早期对话由 LLM 压缩成的要点摘要，随上下文注入
+    summary: str | None = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
 
@@ -72,7 +74,10 @@ class Session:
         self.entities = merge_entities(self.entities, new)
 
     def as_history_messages(self) -> list[dict[str, str]]:
-        return self.recent_messages(10)
+        msgs = self.recent_messages(10)
+        if self.summary:
+            msgs = [{"role": "system", "content": f"历史对话摘要：{self.summary}"}, *msgs]
+        return msgs
 
 
 class SessionStore:

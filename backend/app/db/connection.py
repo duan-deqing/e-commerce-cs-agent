@@ -101,6 +101,33 @@ CREATE TABLE IF NOT EXISTS after_sales_timeline (
     FOREIGN KEY (ticket_id) REFERENCES after_sales_tickets(ticket_id) ON DELETE CASCADE
 );
 
+-- 每请求全链路 Trace：监控指标（P50/P95/TTFT/成本/转接率）与坏案例回溯的数据源
+CREATE TABLE IF NOT EXISTS request_trace (
+    trace_id TEXT PRIMARY KEY,
+    ts REAL NOT NULL,
+    session_id TEXT,
+    user_id TEXT,
+    intent TEXT,
+    confidence REAL,
+    route TEXT,
+    model TEXT,
+    prompt_version TEXT,
+    tools_json TEXT,
+    sources_json TEXT,
+    ttft_ms REAL,
+    total_ms REAL,
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER,
+    tokens_estimated INTEGER NOT NULL DEFAULT 0,
+    cost REAL,
+    handoff INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    answer_snippet TEXT,
+    masked_input INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_trace_ts ON request_trace(ts);
+
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_items_order ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_logi_order ON logistics_tracks(order_id);

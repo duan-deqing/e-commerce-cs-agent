@@ -48,6 +48,15 @@ class Settings(BaseSettings):
     tool_timeout_s: float = 3.0
     tool_max_retries: int = 2
 
+    # 监控：输出长度上限与 Token 单价（$/1k tokens，用于成本估算）
+    max_output_tokens: int = 800
+    llm_price_prompt_per_1k: float = 0.00015
+    llm_price_completion_per_1k: float = 0.0006
+
+    # Prompt 版本与灰度百分比（0-100）：按 session_id 哈希路由到不同 prompt 版本
+    prompt_version: str = "v1"
+    prompt_gray_percent: int = 0
+
     knowledge_dir: str = str(BASE_DIR / "knowledge")
     data_dir: str = str(BASE_DIR / "data")
     db_path: str = str(BASE_DIR / "data" / "app.db")

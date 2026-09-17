@@ -38,3 +38,5 @@ python run.py
 - 订单 / 物流 / 售后 / 促销 / 搜索工具并行编排（重试、超时、降级）
 - RAG：语义分块、Embedding、ChromaDB、Top-5 重排、来源溯源
 - SSE 流式输出、滑动上下文、退款风控、敏感信息脱敏、LLM 故障降级
+
+后端 `app/agent/` 为扁平模块（`orchestrator` / `pipeline` / `continuity` / `after_sales_flow` 等），不再分子目录，详见 [backend/README.md](backend/README.md)。

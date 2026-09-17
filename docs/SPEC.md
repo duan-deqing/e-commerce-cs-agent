@@ -80,7 +80,7 @@
 |----|------|------|
 | API | `app/api/` | HTTP/SSE 路由、请求校验、响应模型 |
 | Schemas | `app/schemas/` | Pydantic 入参/出参 DTO |
-| Orchestrator | `app/agent/` | 意图路由、链路编排、流式输出、降级 |
+| Orchestrator | `app/agent/` | 入口编排 + 统一流水线（工具/RAG/生成）、流式输出、降级 |
 | Intent | `app/intent/` | 11+ 意图零样本分类 |
 | Tools | `app/tools/` | 业务工具封装 + LCEL 并行编排 |
 | RAG | `app/rag/` | 解析、分块、Embedding、Chroma、Rerank、溯源 |
@@ -331,7 +331,7 @@ e-commerce-cs-agent/
 │   ├── app/
 │   │   ├── main.py             # FastAPI 入口
 │   │   ├── api/                # chat / admin / health
-│   │   ├── agent/              # 编排器、Prompt、降级
+│   │   ├── agent/              # orchestrator / pipeline / continuity / after_sales_flow
 │   │   ├── intent/             # 意图 + 实体
 │   │   ├── tools/              # 业务工具 + 并行运行时
 │   │   ├── rag/                # RAG 链路

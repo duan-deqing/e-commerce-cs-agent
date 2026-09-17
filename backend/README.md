@@ -113,7 +113,10 @@ backend/
 │   │   ├── routes_admin.py     # intents/tools/sessions/metrics/reindex
 │   │   └── routes_health.py    # 健康检查
 │   ├── agent/
-│   │   ├── orchestrator.py     # 主编排（意图→工具→RAG→生成）
+│   │   ├── orchestrator.py     # 入口：会话准备 + 意图 + 流式/非流式
+│   │   ├── pipeline.py         # 统一流水线：工具 → RAG → 生成
+│   │   ├── continuity.py       # 售后确认态会话继承
+│   │   ├── after_sales_flow.py # 售后追问/建单/风控短路
 │   │   ├── prompts.py          # 系统提示词
 │   │   └── fallback.py         # 降级与模板回答
 │   ├── intent/
@@ -145,6 +148,32 @@ backend/
 ├── requirements.txt
 ├── run.py
 └── .env.example
+```
+
+### `app/agent/` 模块说明
+
+`agent/` 保持**扁平结构，不再分子目录**（模块少、职责已按文件拆清，再分层只会增加跳转成本）。
+
+| 模块 | 职责 | 调用方 |
+|------|------|--------|
+| `orchestrator.py` | 会话准备、脱敏、意图分类；非流式返回完整 JSON；流式用 Queue 转发 SSE | `api/routes_chat.py` |
+| `pipeline.py` | 统一流水线：快捷回复 → 售后预检 → 工具并行 → RAG → LLM 生成 | `orchestrator` |
+| `continuity.py` | 「确认/取消」与售后确认态下的意图继承 | `orchestrator` |
+| `after_sales_flow.py` | 缺参追问、确认建单、风控/建单短路话术 | `pipeline` |
+| `prompts.py` | 系统提示词与工具/知识块格式化 | `pipeline` |
+| `fallback.py` | 寒暄/转人工/兜底/工具失败模板回答 | `pipeline` |
+
+调用链：
+
+```
+routes_chat
+  └─ orchestrator.handle_message / handle_message_stream
+        ├─ continuity.apply_session_continuity
+        └─ pipeline.run_pipeline
+              ├─ after_sales_flow.*
+              ├─ tools.run_parallel
+              ├─ rag.retrieve
+              └─ llm.chat / chat_stream
 ```
 
 ---

@@ -1,0 +1,237 @@
+from __future__ import annotations
+
+from typing import Any, Awaitable, Callable
+
+from app.agent import after_sales_flow as asf
+from app.agent.fallback import (
+    fallback_response,
+    greeting_response,
+    handoff_response,
+    template_answer_from_tools,
+)
+from app.agent.prompts import (
+    ANSWER_SYSTEM,
+    COMPLAINT_ANSWER,
+    LOW_CONF_RAG_ANSWER,
+    format_sources_block,
+    format_tool_block,
+)
+from app.core.llm import get_llm
+from app.core.logging import get_logger
+from app.intent.labels import INTENT_META, Intent
+from app.rag.chain import retrieve
+from app.risk.masker import mask_sensitive
+from app.state.session import Session
+from app.tools.base import ToolContext, registry, run_parallel
+
+logger = get_logger(__name__)
+
+EmitFn = Callable[[str, dict[str, Any]], Awaitable[None]]
+
+
+async def _emit(emit: EmitFn | None, event: str, data: dict[str, Any]) -> None:
+    if emit is not None:
+        await emit(event, data)
+
+
+def _payload(answer: str, **kwargs: Any) -> dict[str, Any]:
+    base = {
+        "answer": answer,
+        "tools": [],
+        "sources": [],
+        "handoff": False,
+        "risk_flags": [],
+    }
+    base.update(kwargs)
+    return base
+
+
+async def _early(
+    payload: dict[str, Any],
+    emit: EmitFn | None = None,
+    session: Session | None = None,
+) -> dict[str, Any]:
+    """快捷/短路回复：流式时补发完整 answer 作为 token。"""
+    answer = payload.get("answer", "")
+    if emit is not None and answer:
+        await _emit(emit, "token", {"token": answer})
+    if session is not None:
+        payload["answer"] = mask_sensitive(answer)
+    return payload
+
+
+def _should_use_rag(
+    handler: str,
+    session: Session,
+    tool_results: list[dict[str, Any]],
+) -> bool:
+    if handler in {"rag", "hybrid"}:
+        return True
+    if handler == "tools" and not any(t.get("success") for t in tool_results):
+        return True
+    if handler == "fallback" and session.entities.get("product_kw"):
+        return True
+    return False
+
+
+async def run_tools(
+    session: Session,
+    tool_names: list[str],
+    message: str,
+    emit: EmitFn | None = None,
+) -> list[dict[str, Any]]:
+    if not tool_names:
+        return []
+    tools = registry.resolve(tool_names)
+    ctx = ToolContext(
+        user_id=session.user_id,
+        session_id=session.session_id,
+        entities=session.entities,
+        message=message,
+    )
+    for t in tools:
+        await _emit(emit, "tool_start", {"tool": t.name})
+    results = await run_parallel(tools, ctx)
+    tool_results: list[dict[str, Any]] = []
+    for r in results:
+        d = r.to_dict()
+        tool_results.append(d)
+        await _emit(emit, "tool_result", d)
+    return tool_results
+
+
+async def run_rag(
+    message: str,
+    tool_results: list[dict[str, Any]],
+    emit: EmitFn | None = None,
+) -> tuple[str, list[dict[str, Any]], dict[str, Any] | None]:
+    """返回 (knowledge_block, sources, early_payload|None)。"""
+    retrieval = await retrieve(message)
+    sources = retrieval.get("sources", [])
+    if sources:
+        await _emit(emit, "sources", {"sources": sources})
+    knowledge_block = format_sources_block(sources)
+    if retrieval.get("low_confidence") and not tool_results:
+        return knowledge_block, sources, _payload(
+            LOW_CONF_RAG_ANSWER,
+            sources=sources,
+            tools=tool_results,
+            risk_flags=["low_confidence_rag"],
+        )
+    return knowledge_block, sources, None
+
+
+async def generate_answer(
+    session: Session,
+    intent_id: str,
+    meta: dict[str, Any],
+    message: str,
+    tool_results: list[dict[str, Any]],
+    knowledge_block: str,
+    stream: bool = False,
+    emit: EmitFn | None = None,
+) -> str:
+    system = ANSWER_SYSTEM.format(
+        intent_name=meta.get("name", intent_id),
+        tool_block=format_tool_block(tool_results),
+        knowledge_block=knowledge_block or "（无）",
+    )
+    history = session.as_history_messages()[:-1]
+    messages = history + [{"role": "user", "content": message}]
+    llm = get_llm()
+
+    if stream:
+        parts: list[str] = []
+        try:
+            async for token in llm.chat_stream(system=system, messages=messages, temperature=0.3):
+                parts.append(token)
+                await _emit(emit, "token", {"token": token})
+            answer = "".join(parts).strip()
+            if not answer:
+                answer = template_answer_from_tools(meta.get("name", ""), tool_results)
+                await _emit(emit, "token", {"token": answer})
+        except Exception as e:  # noqa: BLE001
+            logger.warning("stream gen failed: %s", e)
+            answer = template_answer_from_tools(meta.get("name", ""), tool_results)
+            await _emit(emit, "token", {"token": answer})
+        return answer
+
+    try:
+        answer = await llm.chat(system=system, messages=messages, temperature=0.3)
+        if not answer or not answer.strip():
+            answer = template_answer_from_tools(meta.get("name", ""), tool_results)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("non-stream gen failed: %s", e)
+        answer = template_answer_from_tools(meta.get("name", ""), tool_results)
+    return answer
+
+
+async def run_pipeline(
+    session: Session,
+    message: str,
+    intent_id: str,
+    emit: EmitFn | None = None,
+    stream: bool = False,
+) -> dict[str, Any]:
+    """意图之后的统一流水线：快捷回复 → 售后 → 工具 → RAG → 生成。"""
+    meta = INTENT_META.get(Intent(intent_id), {})
+    handler = meta.get("handler", "fallback")
+
+    if handler == "greeting":
+        return await _early(greeting_response(), emit, session)
+    if handler == "handoff":
+        session.handoff = True
+        return await _early(handoff_response(), emit, session)
+    if handler == "complaint":
+        return await _early(_payload(COMPLAINT_ANSWER, risk_flags=["complaint"]), emit, session)
+
+    if handler == "after_sales":
+        pre = asf.precheck(session, intent_id)
+        if pre.get("ask"):
+            return await _early(_payload(pre["ask"]), emit, session)
+
+    default_tools = list(meta.get("tools") or [])
+    tool_names = default_tools
+    if handler == "after_sales":
+        tool_names, cancel_payload = asf.resolve_tools(session, intent_id, default_tools)
+        if cancel_payload is not None:
+            return await _early(cancel_payload, emit, session)
+
+    tool_results: list[dict[str, Any]] = []
+    if tool_names:
+        tool_results = await run_tools(session, tool_names, message, emit=emit)
+        if handler == "after_sales":
+            asf.apply_result(session, tool_results)
+            short = asf.short_circuit_payload(tool_results)
+            if short is not None:
+                return await _early(short, emit, session)
+
+    sources: list[dict[str, Any]] = []
+    knowledge_block = ""
+    if _should_use_rag(handler, session, tool_results):
+        knowledge_block, sources, early = await run_rag(message, tool_results, emit=emit)
+        if early is not None:
+            return await _early(early, emit, session)
+
+    if handler == "fallback" and not tool_results and not sources:
+        return await _early(fallback_response(), emit, session)
+
+    answer = await generate_answer(
+        session=session,
+        intent_id=intent_id,
+        meta=meta,
+        message=message,
+        tool_results=tool_results,
+        knowledge_block=knowledge_block,
+        stream=stream,
+        emit=emit,
+    )
+    answer = mask_sensitive(answer)
+
+    return {
+        "answer": answer,
+        "tools": tool_results,
+        "sources": sources,
+        "handoff": session.handoff,
+        "risk_flags": asf.collect_risk_flags(tool_results),
+    }

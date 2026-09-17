@@ -16,6 +16,8 @@ venv/
 node_modules/
 dist/
 .vite/
+frontend/dist/
+*.tsbuildinfo
 
 # OS / IDE
 *.log

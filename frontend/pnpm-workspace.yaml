@@ -1,0 +1,3 @@
+dangerouslyAllowAllBuilds: true
+onlyBuiltDependencies:
+  - esbuild

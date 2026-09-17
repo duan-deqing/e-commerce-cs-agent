@@ -17,7 +17,7 @@ def bootstrap_tools() -> None:
     promo_svc = PromotionService()
     after_svc = AfterSalesService(order_svc)
 
-    registry._tools.clear()
+    registry.clear()
     register_order_tools(order_svc)
     register_logistics_tools(logistics_svc)
     register_after_sales_tools(after_svc)

@@ -1,40 +1,41 @@
-# Frontend — 电商智能客服（规划中）
+# Frontend — Orbit Desk
 
-后端 API 已就绪，本目录用于前端页面。建议技术栈（可按喜好调整）：
+React + TypeScript + Vite + pnpm 的电商智能客服用户端前端（**浅色主题**）。
 
-- **方案 A（推荐）**：Vite + React + TypeScript + Tailwind
-- **方案 B**：Vite + Vue 3 + TypeScript
+## 设计
 
-## 建议页面
+- 首页即对话窗口：居中悬浮圆角卡片（暖白底 + 燃橙强调），移动端自动全屏
+- 对话流单列布局：用户右侧深色气泡，Agent 左侧白卡片
+- **执行过程**折叠时间线位于回答上方：生成中自动展开（意图 → 工具 → RAG → 完成），结束自动收起，可手动展开
+- **引用溯源**卡可点击展开：懒加载知识库文档全文（`GET /api/v1/kb/doc`）并显示来源文件与章节
+- Design tokens 见 `src/styles.css`；动效尊重 `prefers-reduced-motion`
 
-| 页面 | 功能 |
-|------|------|
-| 会话主界面 | 聊天流、SSE 流式渲染、来源卡片 |
-| 侧边栏 | 历史会话、意图/状态展示 |
-| 工具面板（可选） | 展示 tool 调用与耗时（调试用） |
+## 联调
 
-## 对接约定
+- Vite 将 `/api` 代理到 `http://127.0.0.1:8000`
+- 顶栏状态 pill 显示「在线 / 连接失败 / 演示模式」
+- 后端配置 `API_KEY` 时，在 `frontend/.env.local` 设置 `VITE_API_KEY`
 
-- Base URL：`http://127.0.0.1:8000`
-- 非流式：`POST /api/v1/chat`
-- 流式：`POST /api/v1/chat/stream`（SSE）
-- 健康检查：`GET /api/v1/health`
-
-启动后端：
+## 启动
 
 ```powershell
-cd ..\backend
-.\.venv\Scripts\Activate.ps1
-python run.py
-```
+# 推荐：仓库根目录一键
+cd ..
+pnpm install
+pnpm dev
 
-## 初始化示例（Vite + React）
-
-```powershell
+# 或仅前端（需后端已在 8000）
 cd frontend
-# npm create vite@latest . -- --template react-ts
-# npm i
-# npm run dev
+pnpm install
+pnpm dev
 ```
 
-将代理或请求地址指到 `http://127.0.0.1:8000` 即可。
+打开 http://localhost:5173
+
+## 演示话术
+
+- 我的订单到哪了
+- 怎么申请退换货 → 确认
+- 有什么优惠活动
+- 保温杯的保温效果怎么样（触发 RAG，可展开来源溯源）
+- 转人工客服

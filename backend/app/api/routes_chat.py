@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
 from app.agent.orchestrator import orchestrator
 from app.core.auth import verify_api_key
-from app.schemas.chat import ChatRequest, ChatResponse
+from app.schemas.chat import ChatRequest, ChatResponse, DocDetailResponse
 
 router = APIRouter(prefix="/api/v1", tags=["chat"], dependencies=[Depends(verify_api_key)])
 
@@ -38,3 +38,14 @@ async def chat_stream(req: ChatRequest) -> EventSourceResponse:
             }
 
     return EventSourceResponse(event_gen(), media_type="text/event-stream")
+
+
+@router.get("/kb/doc", response_model=DocDetailResponse)
+async def kb_doc(doc_id: str) -> DocDetailResponse:
+    """引用溯源：按 chunk id 返回知识库文档块全文与来源。"""
+    from app.rag.vectorstore import get_chunk_by_id
+
+    detail = await get_chunk_by_id(doc_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"doc not found: {doc_id}")
+    return DocDetailResponse(**detail)

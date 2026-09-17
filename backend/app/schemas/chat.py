@@ -18,12 +18,21 @@ class SourceModel(BaseModel):
     snippet: str
 
 
+class DocDetailResponse(BaseModel):
+    doc_id: str
+    title: str
+    content: str
+    source: str = ""
+    section: str = ""
+
+
 class ToolResultModel(BaseModel):
     tool: str
     success: bool
     data: Any = None
     error: str | None = None
     latency_ms: float = 0.0
+    total_ms: float = 0.0
     retried: int = 0
 
 

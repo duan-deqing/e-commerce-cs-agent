@@ -150,6 +150,14 @@ class _MemoryCollection:
             "distances": [[d for d, _ in top]],
         }
 
+    def get(self, ids):  # type: ignore[no-untyped-def]
+        idx = [self.ids.index(i) for i in ids if i in self.ids]
+        return {
+            "ids": [self.ids[i] for i in idx],
+            "documents": [self.documents[i] for i in idx],
+            "metadatas": [self.metadatas[i] for i in idx],
+        }
+
 
 async def ingest_chunks(chunks: list[Chunk]) -> int:
     if not chunks:
@@ -184,6 +192,29 @@ async def ingest_chunks(chunks: list[Chunk]) -> int:
 async def ingest_knowledge_dir() -> int:
     chunks = chunk_directory()
     return await ingest_chunks(chunks)
+
+
+async def get_chunk_by_id(chunk_id: str) -> dict[str, Any] | None:
+    """按 chunk id 取完整文档块（含来源元数据），供引用溯源展示。"""
+    col = _ensure_collection()
+    if col is None:
+        return None
+    try:
+        res = col.get(ids=[chunk_id])
+    except Exception as e:  # noqa: BLE001
+        logger.warning("get chunk %s failed: %s", chunk_id, e)
+        return None
+    docs = res.get("documents") or []
+    if not docs:
+        return None
+    meta = (res.get("metadatas") or [{}])[0] or {}
+    return {
+        "doc_id": chunk_id,
+        "title": meta.get("title", "知识库"),
+        "content": docs[0] or "",
+        "source": meta.get("source", ""),
+        "section": meta.get("section", ""),
+    }
 
 
 async def similarity_search(query: str, k: int | None = None) -> list[dict[str, Any]]:

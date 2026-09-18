@@ -37,8 +37,9 @@
 
 ### 3. RAG 知识问答
 - Markdown 语义分块（标题优先 + 句边界）
-- Embedding 入库 ChromaDB，Top-K 召回 + 关键词/向量融合重排（Top-5）
-- 回答附带 **来源溯源**（doc_id / 标题 / 片段）
+- Embedding 入库 ChromaDB（可配置独立向量端点，如本地 Ollama `bge-large`），Top-K 召回 + 重排（Top-5）
+- 重排两级：优先 Ollama 本地 cross-encoder（`bge-reranker-v2-m3`，rank-pooled GGUF 经 `/api/embed` 出分）；Ollama 不可用/超时自动降级为「向量分 + 关键词重叠」本地融合打分
+- 回答附带 **来源溯源**（doc_id / 标题 / 片段），来源含 `rerank_source` 标记（ollama/local）便于观测
 - 低置信命中拒答，避免幻觉
 
 ### 4. 稳定性与风控
@@ -278,6 +279,12 @@ const reader = res.body!.getReader();
 | `LLM_API_KEY` | 空 | 空则 Mock LLM |
 | `LLM_MODEL` | `gpt-4o-mini` | 对话模型 |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | 向量模型 |
+| `EMBEDDING_BASE_URL` | 空 | 独立向量端点（OpenAI 兼容，含 `/v1`）；留空跟随 `LLM_BASE_URL`。本地 Ollama 示例：`http://127.0.0.1:11434/v1` |
+| `EMBEDDING_API_KEY` | 空 | 向量端点鉴权；留空跟随 `LLM_API_KEY`（Ollama 无需） |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | 本地 Ollama 服务地址（重排用） |
+| `RERANK_BACKEND` | `auto` | `auto`=优先 Ollama cross-encoder，失败降级本地融合；`local`=仅本地融合 |
+| `RERANK_MODEL` | `dengcao/bge-reranker-v2-m3` | Ollama 重排模型（rank-pooled GGUF，如 `qllama/bge-reranker-v2-m3`） |
+| `RERANK_TIMEOUT_S` | `5.0` | Ollama 重排超时，超时降级本地融合 |
 | `MOCK_LLM` | `auto` | `auto` / `true` / `false` |
 | `TAVILY_API_KEY` | 空 | 全网搜索，空则关闭 |
 | `CHROMA_PERSIST_DIR` | `.chroma` | 向量库目录 |

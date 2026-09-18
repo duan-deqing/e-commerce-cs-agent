@@ -32,10 +32,21 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = "gpt-4o-mini"
     embedding_model: str = "text-embedding-3-small"
+    # 向量端点独立配置（OpenAI 兼容，含 /v1）；留空跟随 LLM_BASE_URL。
+    # 本地 Ollama 示例：EMBEDDING_BASE_URL=http://127.0.0.1:11434/v1 + EMBEDDING_MODEL=bge-large
+    embedding_base_url: str = ""
+    embedding_api_key: str = ""
     mock_llm: str = "auto"  # auto | true | false
     # 思考型模型（DashScope qwen3 / DeepSeek-R1 等）思考开关：
     # auto=不下发参数（跟随端点默认）；false=enable_thinking:false，显著降低首 token 延迟（意图分类同步受益）
     llm_enable_thinking: str = "auto"
+
+    # 本地重排：Ollama 托管的 cross-encoder（bge-reranker-v2-m3，/api/embed rank pooling 出 1 维分数）
+    # auto=优先 Ollama，失败降级本地融合打分；local=仅本地融合
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    rerank_backend: str = "auto"
+    rerank_model: str = "dengcao/bge-reranker-v2-m3"
+    rerank_timeout_s: float = 5.0
 
     tavily_api_key: str = ""
 

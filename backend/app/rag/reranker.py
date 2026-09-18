@@ -1,11 +1,17 @@
-"""本地融合重排：向量分 + 中英文 2-gram 关键词重叠。"""
+"""重排：优先 Ollama 本地 cross-encoder（bge-reranker-v2-m3），失败降级本地融合打分。"""
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 
+import httpx
+
 from app.core.config import settings
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def _tokenize(text: str) -> set[str]:
@@ -23,25 +29,73 @@ def _tokenize(text: str) -> set[str]:
     return parts
 
 
-def rerank(query: str, docs: list[dict[str, Any]], top_n: int | None = None) -> list[dict[str, Any]]:
-    """本地融合重排：向量分 + 关键词重叠。
-
-    生产可替换为 bge-reranker / Cohere Rerank API，接口保持一致。
-    """
-    top_n = top_n or settings.rag_rerank_top_n
-    if not docs:
-        return []
+def _local_fusion_rerank(
+    query: str, docs: list[dict[str, Any]], top_n: int
+) -> list[dict[str, Any]]:
+    """本地融合重排：向量分 0.65 + 关键词重叠 0.35。"""
     q_tokens = _tokenize(query)
     scored: list[dict[str, Any]] = []
     for d in docs:
         t_tokens = _tokenize(d.get("text", ""))
         overlap = len(q_tokens & t_tokens) / (len(q_tokens) or 1)
         vec_score = float(d.get("score", 0.0))
-        # 融合：向量 0.65 + 词重叠 0.35
         fused = 0.65 * vec_score + 0.35 * min(1.0, overlap * 2)
         item = dict(d)
         item["rerank_score"] = round(fused, 4)
         item["keyword_overlap"] = round(overlap, 4)
+        item["rerank_source"] = "local"
         scored.append(item)
     scored.sort(key=lambda x: x["rerank_score"], reverse=True)
     return scored[:top_n]
+
+
+async def _ollama_scores(query: str, docs: list[dict[str, Any]]) -> dict[int, float] | None:
+    """Ollama cross-encoder 打分：query</s></s>doc 经 rank pooling 输出 1 维 logit，sigmoid 归一。
+
+    不可用/输出形态异常时返回 None，由上层降级本地融合。
+    """
+    model = settings.rerank_model.strip()
+    if not model or not docs:
+        return None
+    pairs = [f"{query}</s></s>{d.get('text', '')}" for d in docs]
+    try:
+        async with httpx.AsyncClient(timeout=settings.rerank_timeout_s) as client:
+            resp = await client.post(
+                f"{settings.ollama_base_url.rstrip('/')}/api/embed",
+                json={"model": model, "input": pairs},
+            )
+            if resp.status_code >= 400:
+                logger.warning("ollama rerank HTTP %s: %s", resp.status_code, resp.text[:200])
+                return None
+            embs = resp.json().get("embeddings") or []
+            if len(embs) != len(docs) or any(len(e) != 1 for e in embs):
+                logger.warning("ollama rerank unexpected output shape: %s docs", len(embs))
+                return None
+            return {i: 1.0 / (1.0 + math.exp(-float(e[0]))) for i, e in enumerate(embs)}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("ollama rerank unavailable, fallback to local fusion: %s", e)
+        return None
+
+
+async def rerank(
+    query: str, docs: list[dict[str, Any]], top_n: int | None = None
+) -> list[dict[str, Any]]:
+    """重排入口：auto=优先 Ollama cross-encoder（失败降级）；local=仅本地融合。"""
+    top_n = top_n or settings.rag_rerank_top_n
+    if not docs:
+        return []
+    backend = settings.rerank_backend.strip().lower()
+    scores: dict[int, float] | None = None
+    if backend in {"auto", "ollama"}:
+        scores = await _ollama_scores(query, docs)
+    if scores is not None:
+        out = [dict(d) for d in docs]
+        for i, item in enumerate(out):
+            item["rerank_score"] = round(scores[i], 4)
+            item["rerank_source"] = "ollama"
+        out.sort(key=lambda x: x["rerank_score"], reverse=True)
+        return out[:top_n]
+    if backend == "ollama":
+        logger.warning("rerank_backend=ollama but unavailable; docs kept in recall order")
+        return docs[:top_n]
+    return _local_fusion_rerank(query, docs, top_n)

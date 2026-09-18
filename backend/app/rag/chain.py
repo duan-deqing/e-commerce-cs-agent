@@ -28,7 +28,7 @@ NO_HIT_MSG = (
 
 async def retrieve(query: str, top_k: int | None = None, top_n: int | None = None) -> dict[str, Any]:
     hits = await similarity_search(query, k=top_k or settings.rag_top_k)
-    ranked = rerank(query, hits, top_n=top_n or settings.rag_rerank_top_n)
+    ranked = await rerank(query, hits, top_n=top_n or settings.rag_rerank_top_n)
     threshold = settings.rag_score_threshold
     kept = [d for d in ranked if d.get("rerank_score", 0) >= threshold]
     # mock 向量下分数整体偏低，放宽：有相对高分也保留 top_n，并标记 low_confidence

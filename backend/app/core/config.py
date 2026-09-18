@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     # auto=优先 Ollama，失败降级本地融合打分；local=仅本地融合
     ollama_base_url: str = "http://127.0.0.1:11434"
     rerank_backend: str = "auto"
-    rerank_model: str = "dengcao/bge-reranker-v2-m3"
+    rerank_model: str = "qllama/bge-reranker-v2-m3"
     rerank_timeout_s: float = 5.0
 
     tavily_api_key: str = ""

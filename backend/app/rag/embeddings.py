@@ -5,6 +5,23 @@ import httpx
 from app.core.config import settings
 from app.core.llm import get_llm
 
+_http: httpx.AsyncClient | None = None
+
+
+def _get_http() -> httpx.AsyncClient:
+    # 模块级共享连接，避免每批请求重建 client
+    global _http
+    if _http is None or _http.is_closed:
+        _http = httpx.AsyncClient(timeout=60.0)
+    return _http
+
+
+async def aclose() -> None:
+    global _http
+    if _http is not None and not _http.is_closed:
+        await _http.aclose()
+    _http = None
+
 
 async def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
@@ -27,21 +44,21 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
         headers["Authorization"] = f"Bearer {key}"
     vectors: list[list[float]] = []
     batch = 32
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        for i in range(0, len(texts), batch):
-            part = texts[i : i + batch]
-            resp = await client.post(
-                f"{base}/embeddings",
-                headers=headers,
-                json={"model": settings.embedding_model, "input": part},
+    client = _get_http()
+    for i in range(0, len(texts), batch):
+        part = texts[i : i + batch]
+        resp = await client.post(
+            f"{base}/embeddings",
+            headers=headers,
+            json={"model": settings.embedding_model, "input": part},
+        )
+        if resp.status_code >= 400:
+            raise RuntimeError(
+                f"embedding API {resp.status_code}, model={settings.embedding_model}: "
+                f"{resp.text[:500]}"
             )
-            if resp.status_code >= 400:
-                raise RuntimeError(
-                    f"embedding API {resp.status_code}, model={settings.embedding_model}: "
-                    f"{resp.text[:500]}"
-                )
-            data = resp.json()
-            vectors.extend(item["embedding"] for item in data["data"])
+        data = resp.json()
+        vectors.extend(item["embedding"] for item in data["data"])
     return vectors
 
 

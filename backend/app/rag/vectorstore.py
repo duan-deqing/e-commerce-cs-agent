@@ -15,6 +15,13 @@ _client = None
 _collection = None
 _use_chroma = True
 _collection_dim: int | None = None
+_collection_emb: str | None = None
+
+
+def _emb_identity() -> str:
+    """当前向量模型标识（端点|模型名）。同维度不同模型的向量不可混库。"""
+    base = settings.embedding_base_url.strip().rstrip("/") or settings.llm_base_url
+    return f"{base}|{settings.embedding_model}"
 
 
 def _get_chroma_client():
@@ -31,9 +38,9 @@ def _get_chroma_client():
     return _client
 
 
-def _ensure_collection(dim: int | None = None):
-    """按需打开/重建集合；embedding 维度变化时自动重建。"""
-    global _collection, _use_chroma, _collection_dim
+def _ensure_collection(dim: int | None = None, identity: str | None = None):
+    """按需打开/重建集合；向量维度或 embedding 模型变化时自动重建。"""
+    global _collection, _use_chroma, _collection_dim, _collection_emb
 
     if _use_chroma is False and isinstance(_collection, _MemoryCollection):
         return _collection
@@ -61,45 +68,73 @@ def _ensure_collection(dim: int | None = None):
             except Exception:  # noqa: BLE001
                 stored_dim = None
 
-        need_rebuild = dim is not None and stored_dim is not None and stored_dim != dim
-        if need_rebuild:
+        stored_emb = (col.metadata or {}).get("emb") or None
+        # 旧库无 dim 元数据时，用已有向量长度推断
+        if stored_dim is None and col.count() > 0:
+            try:
+                peek = col.peek(limit=1)
+                embs = peek.get("embeddings")
+                if embs is not None and len(embs):
+                    stored_dim = len(embs[0])
+            except Exception:  # noqa: BLE001
+                stored_dim = None
+
+        dim_mismatch = dim is not None and stored_dim is not None and stored_dim != dim
+        emb_mismatch = identity is not None and stored_emb is not None and stored_emb != identity
+        # 旧库无模型标识且非空：无法证明向量与当前配置同源，重建最安全
+        emb_unknown = identity is not None and stored_emb is None and col.count() > 0
+        if dim_mismatch or emb_mismatch or emb_unknown:
             logger.warning(
-                "Chroma dim mismatch (stored=%s, new=%s), rebuilding collection",
+                "Chroma embedding mismatch (stored=%s/%s, new=%s/%s), rebuilding collection",
                 stored_dim,
+                stored_emb,
                 dim,
+                identity,
             )
             client.delete_collection("ecommerce_kb")
-            col = client.get_or_create_collection(
-                name="ecommerce_kb",
-                metadata={"hnsw:space": "cosine", "dim": str(dim)},
-            )
+            meta: dict = {"hnsw:space": "cosine"}
+            if dim is not None:
+                meta["dim"] = str(dim)
+            if identity is not None:
+                meta["emb"] = identity
+            col = client.get_or_create_collection(name="ecommerce_kb", metadata=meta)
         elif dim is not None and not col.metadata:
             # 补写维度元数据
-            client.modify_collection(
-                "ecommerce_kb",
-                metadata={"hnsw:space": "cosine", "dim": str(dim)},
-            )
+            meta = {"hnsw:space": "cosine", "dim": str(dim)}
+            if identity is not None:
+                meta["emb"] = identity
+            client.modify_collection("ecommerce_kb", metadata=meta)
         _collection = col
         _collection_dim = dim or stored_dim
+        _collection_emb = identity or stored_emb
         _use_chroma = True
-        logger.info("ChromaDB ready at %s (dim=%s)", settings.chroma_path, _collection_dim)
+        logger.info(
+            "ChromaDB ready at %s (dim=%s emb=%s)", settings.chroma_path, _collection_dim, _collection_emb
+        )
     except Exception:
         # 集合不存在
         meta = {"hnsw:space": "cosine"}
         if dim is not None:
             meta["dim"] = str(dim)
+        if identity is not None:
+            meta["emb"] = identity
         _collection = client.get_or_create_collection(name="ecommerce_kb", metadata=meta)
         _collection_dim = dim
+        _collection_emb = identity
         _use_chroma = True
         logger.info("ChromaDB ready at %s (new collection dim=%s)", settings.chroma_path, dim)
     return _collection
 
 
-def _get_collection(dim: int | None = None):
+def _get_collection(dim: int | None = None, identity: str | None = None):
     global _collection
-    if _collection is not None and (dim is None or _collection_dim in (None, dim)):
+    if (
+        _collection is not None
+        and (dim is None or _collection_dim in (None, dim))
+        and (identity is None or _collection_emb in (None, identity))
+    ):
         return _collection
-    return _ensure_collection(dim)
+    return _ensure_collection(dim, identity)
 
 
 class _MemoryCollection:
@@ -163,6 +198,7 @@ async def ingest_chunks(chunks: list[Chunk]) -> int:
     if not chunks:
         return 0
     texts = [c.text for c in chunks]
+    identity = _emb_identity()
     try:
         embs = await embed_texts(texts)
     except Exception as e:  # noqa: BLE001
@@ -170,8 +206,10 @@ async def ingest_chunks(chunks: list[Chunk]) -> int:
         from app.core.llm import MockLLM
 
         embs = await MockLLM().embed(texts)
+        # mock 向量与真实模型不同源，标识为 mock 以便真实配置恢复后触发重建
+        identity = "mock"
     dim = len(embs[0]) if embs else None
-    col = _ensure_collection(dim=dim)
+    col = _ensure_collection(dim=dim, identity=identity)
     ids = [c.doc_id for c in chunks]
     metadatas = [
         {
@@ -220,7 +258,7 @@ async def get_chunk_by_id(chunk_id: str) -> dict[str, Any] | None:
 async def similarity_search(query: str, k: int | None = None) -> list[dict[str, Any]]:
     k = k or settings.rag_top_k
     qvec = await embed_query(query)
-    col = _ensure_collection(dim=len(qvec))
+    col = _ensure_collection(dim=len(qvec), identity=_emb_identity())
     try:
         count = col.count()
     except Exception:  # noqa: BLE001

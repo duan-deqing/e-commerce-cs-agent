@@ -283,7 +283,7 @@ const reader = res.body!.getReader();
 | `EMBEDDING_API_KEY` | 空 | 向量端点鉴权；留空跟随 `LLM_API_KEY`（Ollama 无需） |
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | 本地 Ollama 服务地址（重排用） |
 | `RERANK_BACKEND` | `auto` | `auto`=优先 Ollama cross-encoder，失败降级本地融合；`local`=仅本地融合 |
-| `RERANK_MODEL` | `dengcao/bge-reranker-v2-m3` | Ollama 重排模型（rank-pooled GGUF，如 `qllama/bge-reranker-v2-m3`） |
+| `RERANK_MODEL` | `qllama/bge-reranker-v2-m3` | Ollama 重排模型（rank-pooled GGUF） |
 | `RERANK_TIMEOUT_S` | `5.0` | Ollama 重排超时，超时降级本地融合 |
 | `MOCK_LLM` | `auto` | `auto` / `true` / `false` |
 | `TAVILY_API_KEY` | 空 | 全网搜索，空则关闭 |

@@ -31,18 +31,16 @@ async def retrieve(query: str, top_k: int | None = None, top_n: int | None = Non
     ranked = await rerank(query, hits, top_n=top_n or settings.rag_rerank_top_n)
     threshold = settings.rag_score_threshold
     kept = [d for d in ranked if d.get("rerank_score", 0) >= threshold]
-    # mock 向量下分数整体偏低，放宽：有相对高分也保留 top_n，并标记 low_confidence
+    # 无一过阈值：保留相对高分 top_n 并标记 low_confidence（避免 mock 向量全灭）
     low_confidence = not kept
     if not kept and ranked:
         kept = ranked[: max(1, top_n or settings.rag_rerank_top_n)]
-        # 用相对排名而非绝对阈值，避免 mock embedding 全灭
-        if ranked[0].get("rerank_score", 0) < threshold:
-            low_confidence = True
     sources = [
         {
             "doc_id": d["id"],
             "title": d.get("metadata", {}).get("title", "知识库"),
             "score": d.get("rerank_score"),
+            "rerank_source": d.get("rerank_source", "local"),
             "snippet": (d.get("text") or "")[:180],
         }
         for d in kept

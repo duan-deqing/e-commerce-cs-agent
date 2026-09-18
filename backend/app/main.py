@@ -30,6 +30,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:  # noqa: BLE001
         print(f"[startup] knowledge ingest skipped: {e}")
     yield
+    # 释放 RAG 共享 HTTP 连接
+    from app.rag import embeddings as _emb
+    from app.rag import reranker as _rr
+
+    await _emb.aclose()
+    await _rr.aclose()
 
 
 def create_app() -> FastAPI:

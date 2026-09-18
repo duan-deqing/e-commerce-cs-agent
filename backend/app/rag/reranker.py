@@ -13,6 +13,23 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+_http: httpx.AsyncClient | None = None
+
+
+def _get_http() -> httpx.AsyncClient:
+    # 模块级共享连接，避免每次检索重建 client
+    global _http
+    if _http is None or _http.is_closed:
+        _http = httpx.AsyncClient(timeout=settings.rerank_timeout_s)
+    return _http
+
+
+async def aclose() -> None:
+    global _http
+    if _http is not None and not _http.is_closed:
+        await _http.aclose()
+    _http = None
+
 
 def _tokenize(text: str) -> set[str]:
     # 中英文混合粗分词
@@ -59,19 +76,18 @@ async def _ollama_scores(query: str, docs: list[dict[str, Any]]) -> dict[int, fl
         return None
     pairs = [f"{query}</s></s>{d.get('text', '')}" for d in docs]
     try:
-        async with httpx.AsyncClient(timeout=settings.rerank_timeout_s) as client:
-            resp = await client.post(
-                f"{settings.ollama_base_url.rstrip('/')}/api/embed",
-                json={"model": model, "input": pairs},
-            )
-            if resp.status_code >= 400:
-                logger.warning("ollama rerank HTTP %s: %s", resp.status_code, resp.text[:200])
-                return None
-            embs = resp.json().get("embeddings") or []
-            if len(embs) != len(docs) or any(len(e) != 1 for e in embs):
-                logger.warning("ollama rerank unexpected output shape: %s docs", len(embs))
-                return None
-            return {i: 1.0 / (1.0 + math.exp(-float(e[0]))) for i, e in enumerate(embs)}
+        resp = await _get_http().post(
+            f"{settings.ollama_base_url.rstrip('/')}/api/embed",
+            json={"model": model, "input": pairs},
+        )
+        if resp.status_code >= 400:
+            logger.warning("ollama rerank HTTP %s: %s", resp.status_code, resp.text[:200])
+            return None
+        embs = resp.json().get("embeddings") or []
+        if len(embs) != len(docs) or any(len(e) != 1 for e in embs):
+            logger.warning("ollama rerank unexpected output shape: %s docs", len(embs))
+            return None
+        return {i: 1.0 / (1.0 + math.exp(-float(e[0]))) for i, e in enumerate(embs)}
     except Exception as e:  # noqa: BLE001
         logger.warning("ollama rerank unavailable, fallback to local fusion: %s", e)
         return None
@@ -85,17 +101,15 @@ async def rerank(
     if not docs:
         return []
     backend = settings.rerank_backend.strip().lower()
-    scores: dict[int, float] | None = None
     if backend in {"auto", "ollama"}:
         scores = await _ollama_scores(query, docs)
-    if scores is not None:
-        out = [dict(d) for d in docs]
-        for i, item in enumerate(out):
-            item["rerank_score"] = round(scores[i], 4)
-            item["rerank_source"] = "ollama"
-        out.sort(key=lambda x: x["rerank_score"], reverse=True)
-        return out[:top_n]
-    if backend == "ollama":
-        logger.warning("rerank_backend=ollama but unavailable; docs kept in recall order")
-        return docs[:top_n]
+        if scores is not None:
+            out = [dict(d) for d in docs]
+            for i, item in enumerate(out):
+                item["rerank_score"] = round(scores[i], 4)
+                item["rerank_source"] = "ollama"
+            out.sort(key=lambda x: x["rerank_score"], reverse=True)
+            return out[:top_n]
+        if backend == "ollama":
+            logger.warning("rerank_backend=ollama but unavailable; falling back to local fusion")
     return _local_fusion_rerank(query, docs, top_n)
